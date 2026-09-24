@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Acil Tıp - Tam Güvenlikli Ek Mesai Portalı</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
+        h1, h2 { color: #2c3e50; margin-top: 0; }
+        .container { display: flex; gap: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .form-card { flex: 1; }
+        .list-card { flex: 2; }
+        .admin-card { background: #eef9f5; border: 2px solid #27ae60; margin-bottom: 20px; padding: 15px; border-radius: 8px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
+        select, input, button { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #27ae60; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #219150; }
+        .btn-cancel { background-color: #e74c3c; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-cancel:hover { background-color: #c0392b; }
+        .error { color: #c0392b; background-color: #f9ebea; padding: 10px; border-radius: 4px; border: 1px solid #f5b7b1; margin-bottom: 15px; display: none; }
+        .success { color: #27ae60; background-color: #eafaf1; padding: 10px; border-radius: 4px; border: 1px solid #a9dfbf; margin-bottom: 15px; display: none; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #2c3e50; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .badge-red { background-color: #e74c3c; color: white; padding: 3px 7px; border-radius: 3px; font-size: 12px; }
+        .badge-orange { background-color: #e67e22; color: white; padding: 3px 7px; border-radius: 3px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <h1>🏥 Bağcılar EAH Acil Tıp Kliniği - Ek Mesai Portalı</h1>
+    
+    <div class="admin-card">
+        <h3>👑 Yönetici Paneli (Canlı Limit Düzenleme)</h3>
+        <p>Limit düşürülürse, hekimlerin en erken yazdığı ilk ek mesaileri korunur, kalanlar otomatik temizlenir.</p>
+        <select id="adminLimit" style="width: auto; display: inline-block;">
+            <option value="1">1 Ek Mesai</option>
+            <option value="2">2 Ek Mesai</option>
+            <option value="3" selected>3 Ek Mesai</option>
+            <option value="4">4 Ek Mesai</option>
+            <option value="5">5 Ek Mesai</option>
+        </select>
+        <button onclick="setAdminLimit()" style="width: auto; display: inline-block;">Limiti Uygula</button>
+    </div>
+
+    <div class="container">
+        <!-- FORM -->
+        <div class="card form-card">
+            <h2>Ek Mesai Yaz</h2>
+            <div id="errorBox" class="error"></div>
+            <div id="successBox" class="success"></div>
+            
+            <div class="form-group">
+                <label>Hekim (Excel Listesi Tam İsim):</label>
+                <select id="doctorSelect"></select>
+            </div>
+            <div class="form-group">
+                <label>Tarih:</label>
+                <input type="date" id="shiftDate" min="2026-10-01" max="2026-10-31">
+            </div>
+            <div class="form-group">
+                <label>Alan (Maks 1 Kişi):</label>
+                <select id="areaSelect">
+                    <option value="KIRMIZI ALAN">Kırmızı Alan</option>
+                    <option value="TRAVMA">Travma</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Süre:</label>
+                <select id="durationSelect">
+                    <option value="12">12 Saat</option>
+                    <option value="16">16 Saat</option>
+                </select>
+            </div>
+            <button onclick="saveShift()">Ek Mesaiyi Kaydet (İlk Gelen Alır)</button>
+        </div>
+
+        <!-- TABLO VE İPTAL BUTONU -->
+        <div class="card list-card">
+            <h2>Kayıtlı Ek Mesailer ve İptal Paneli</h2>
+            <table id="shiftTable">
+                <thead>
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Hekim</th>
+                        <th>Alan</th>
+                        <th>Süre</th>
+                        <th>İşlem</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+    // Excel Dosyanızdaki İsimler Tam Entegre Edildi
+    const doctors = [
+        "BERİTAN ZÜMRÜT", "YASER HASAN BOLAT", "AHMET ÖZAY", "FATMA KÖLEOĞLU",
+        "ENES GÜLDEŞ", "ÖMER TARIK SARIBIYIK", "HALİL CAN DOĞAN", "SÜEDA YALÇIN",
+        "AHMET DÖNEN", "MUHAMMED ŞEN", "NİSANUR YALÇIN", "TUTKU SOYDAL",
+        "TUNAHAN KAYA", "YAKUP BORA PEKTAŞ", "ÖMER KİLİM", "BARAN NİKBAY",
+        "OĞUZCAN TÜFEKCİ", "ÖMER FARUK AKINCI", "SERKAN KANAT", "FARUK ARI",
+        "TÜRKAN ESİN", "MUSTAFA GÜLŞEN", "HÜRRE KÖSE", "SERAP ORAL"
+    ];
+
+    const select = document.getElementById('doctorSelect');
+    doctors.forEach((doc, idx) => {
+        let opt = document.createElement('option');
+        opt.value = idx + 1;
+        opt.innerText = doc;
+        select.appendChild(opt);
+    });
+
+    async function setAdminLimit() {
+        const newLimit = document.getElementById('adminLimit').value;
+        const res = await fetch('/api/admin/set-limit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ newLimit })
+        });
+        const data = await res.json();
+        alert(data.message);
+    }
+
+    async function saveShift() {
+        const doctor_id = document.getElementById('doctorSelect').value;
+        const shift_date = document.getElementById('shiftDate').value;
+        const area = document.getElementById('areaSelect').value;
+        const duration = document.getElementById('durationSelect').value;
+
+        const res = await fetch('/api/shift/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ doctor_id, shift_date, area, duration })
+        });
+        const data = await res.json();
+
+        if(data.error) {
+            document.getElementById('errorBox').innerText = data.error;
+            document.getElementById('errorBox').style.display = 'block';
+            document.getElementById('successBox').style.display = 'none';
+        } else {
+            document.getElementById('successBox').innerText = data.message;
+            document.getElementById('successBox').style.display = 'block';
+            document.getElementById('errorBox').style.display = 'none';
+        }
+    }
+</script>
+</body>
+</html>
