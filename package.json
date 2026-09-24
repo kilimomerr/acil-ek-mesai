@@ -1,0 +1,13 @@
+{
+  "name": "bagcilar-acil-ekmesai",
+  "version": "1.0.0",
+  "description": "Acil Servis Ekleme Mesai Portalı",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6"
+  }
+}
