@@ -24,6 +24,7 @@ db.serialize(() => {
     db.run(`DROP TABLE IF EXISTS doctors`);
     db.run(`DROP TABLE IF EXISTS shifts`);
     db.run(`DROP TABLE IF EXISTS main_duties`);
+    db.run(`DROP TABLE IF EXISTS settings`);
 
     db.run(`CREATE TABLE IF NOT EXISTS doctors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +44,7 @@ db.serialize(() => {
         shift_date TEXT NOT NULL,
         area TEXT NOT NULL,
         duration INTEGER NOT NULL,
-        created_by TEXT DEFAULT 'user',
+        created_by TEXT DEFAULT 'admin',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
@@ -67,11 +68,11 @@ db.serialize(() => {
         "B.DEMİRCİ", "YAKUP", "MÜCAHİT", "CEM", "ECE", "RAUF", "MEHMET", "OSMAN", "M.GÜLŞEN",
         "E.ASLAN", "FATMA", "GAMZE", "AFRA", "HANİFE", "EMRECAN", "SAMET", "HÜRRE", "SERAP",
         "P.ÖZATAK", "T.ÖZATAK", "B.CAM", "B.AKIN", "TUNAHAN", "MELİS", "SENA", "OĞUZCAN",
-        "Y.ÇELİK", "ÖMER", "HÜRRE", "NEDA", "TUTKU", "K.ÖZSİVRİ", "SÜEDA", "M.GÜLŞEN",
+        "Y.ÇELİK", "ÖMER", "NEDA", "TUTKU", "K.ÖZSİVRİ", "SÜEDA",
         "F.ARİ", "E.USLU", "TARIK", "SERKAN", "ERKAN", "F.ÖZKAN", "YUNUS", "ESHAT", "MUKADDES",
-        "BERİTAN", "Ö.FARUK", "MUKADDES", "A.TEPE", "BERKE", "S.SOLAK", "A.DÖNEN",
-        "H.TURGUT", "NİSA", "MELİS", "B.SAĞLAM", "E.BAHAR", "KÜBRA", "E.FERHATLAR",
-        "HALİL", "OĞUZCAN", "GÖKBERK", "N.YAPAR", "BARAN", "S.KANAT", "BÜŞRA", "FARUK",
+        "BERİTAN", "Ö.FARUK", "A.TEPE", "BERKE", "S.SOLAK", "A.DÖNEN",
+        "H.TURGUT", "NİSA", "B.SAĞLAM", "E.BAHAR", "KÜBRA", "E.FERHATLAR",
+        "HALİL", "N.YAPAR", "BARAN", "S.KANAT", "BÜŞRA", "FARUK",
         "MUSTAFA", "BERAN"
     ];
 
@@ -98,7 +99,7 @@ db.serialize(() => {
         }
     };
 
-    // Ekim 2026 Nöbet ve Ek Mesai Dökümü
+    // Ekim 2026 Nöbet ve Ek Mesai Dökümü (Yönetici Tarafından Yüklenmiş)
     async function loadOctoberSchedule() {
         const schedule = [
             {
@@ -385,7 +386,7 @@ db.serialize(() => {
                 }
             }
         }
-        console.log("Ekim 2026 nöbetleri ve ek mesaileri veritabanına başarıyla aktarıldı.");
+        console.log("Ekim 2026 nöbetleri ve ek mesaileri yönetici girişiyle veritabanına aktarıldı.");
     }
 
     loadOctoberSchedule();
@@ -636,7 +637,7 @@ app.get('/api/admin/export-excel', async (req, res) => {
         });
 
         worksheet.getRow(1).font = { bold: true };
-        
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=Acil_Servis_Nobet_Listesi.xlsx');
 
