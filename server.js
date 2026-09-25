@@ -131,6 +131,7 @@ app.post('/api/admin/set-limit', (req, res) => {
     });
 });
 
+// Yönetici Tarafından Rutin Nöbet Ekleme
 app.post('/api/admin/add-main-duty', (req, res) => {
     const { doctor_id, duty_date } = req.body;
     if (!doctor_id || !duty_date) return res.status(400).json({ error: "Eksik bilgi." });
@@ -138,6 +139,18 @@ app.post('/api/admin/add-main-duty', (req, res) => {
     db.run(`INSERT INTO main_duties (doctor_id, duty_date) VALUES (?, ?)`, [doctor_id, duty_date], (err) => {
         if (err) return res.status(500).json({ error: "Nöbet eklenemedi." });
         res.json({ message: "Rutin 24 saatlik nöbet eklendi." });
+    });
+});
+
+// Yönetici Tarafından Ek Mesai Ekleme (Limit/Kural Muaf)
+app.post('/api/admin/add-shift', (req, res) => {
+    const { doctor_id, shift_date, area, duration } = req.body;
+    if (!doctor_id || !shift_date || !area || !duration) return res.status(400).json({ error: "Eksik bilgi." });
+
+    db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration) VALUES (?, ?, ?, ?)`, 
+        [doctor_id, shift_date, area, duration], (err) => {
+        if (err) return res.status(500).json({ error: "Ek mesai eklenemedi." });
+        res.json({ message: "Hekime ek mesai tanımlandı." });
     });
 });
 
@@ -155,7 +168,7 @@ app.get('/api/shifts', (req, res) => {
     db.all(sql, [], (err, rows) => res.json(rows || []));
 });
 
-// KONTROLLÜ EK MESAİ EKLEME
+// KONTROLLÜ EK MESAİ EKLEME (HEKİM TARAFINDAN)
 app.post('/api/shift/add', async (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
 
@@ -206,20 +219,17 @@ app.post('/api/shift/add', async (req, res) => {
     }
 
     // 3. KURAL: Ardışık 3 Gün Üst Üste Görev Yapılamaz
-    // Durum A: (T-2, T-1, Seçilen Gün T) -> T-2 ve T-1 doluysa engelle
     const dMinus1 = addDays(shift_date, -1);
     const dMinus2 = addDays(shift_date, -2);
     if (allDutyDates.has(dMinus1) && allDutyDates.has(dMinus2)) {
         return res.status(400).json({ error: "Ardışık 3 gün üst üste takvime yazılınamaz!" });
     }
 
-    // Durum B: (T-1, Seçilen Gün T, T+1) -> T-1 ve T+1 doluysa engelle
     const dPlus1 = addDays(shift_date, 1);
     if (allDutyDates.has(dMinus1) && allDutyDates.has(dPlus1)) {
         return res.status(400).json({ error: "Bu tarih seçilirse ardışık 3 gün üst üste görev oluşur!" });
     }
 
-    // Durum C: (Seçilen Gün T, T+1, T+2) -> T+1 ve T+2 doluysa engelle
     const dPlus2 = addDays(shift_date, 2);
     if (allDutyDates.has(dPlus1) && allDutyDates.has(dPlus2)) {
         return res.status(400).json({ error: "Bu tarih seçilirse ardışık 3 gün üst üste görev oluşur!" });
@@ -271,11 +281,12 @@ app.delete('/api/shift/delete/:id', async (req, res) => {
         }
 
         db.run(`DELETE FROM shifts WHERE id = ?`, [shiftId], () => {
-            res.json({ message: "Ek mesainiz iptal edildi." });
+            res.json({ message: "Ek mesai iptal edildi." });
         });
     });
 });
 
+// YÖNETİCİ RUTİN NÖBET SİLME
 app.delete('/api/admin/main-duty/:id', (req, res) => {
     db.run(`DELETE FROM main_duties WHERE id = ?`, [req.params.id], () => {
         res.json({ message: "Rutin 24s nöbet silindi." });
