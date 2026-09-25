@@ -57,7 +57,7 @@ db.serialize(() => {
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
 
-    // Varsayılan Ayarlar (Varsayılan aktif ay: içinde bulunulan YYYY-MM)
+    // Varsayılan Ayarlar
     const currentMonthStr = new Date().toISOString().slice(0, 7);
     db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_shifts', '3')`);
     db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('active_month', '${currentMonthStr}')`);
@@ -137,7 +137,7 @@ app.post('/api/admin/add-main-duty', (req, res) => {
 
     db.run(`INSERT INTO main_duties (doctor_id, duty_date) VALUES (?, ?)`, [doctor_id, duty_date], (err) => {
         if (err) return res.status(500).json({ error: "Nöbet eklenemedi." });
-        res.json({ message: "Rutin nöbet eklendi." });
+        res.json({ message: "Rutin 24 saatlik nöbet eklendi." });
     });
 });
 
@@ -159,52 +159,75 @@ app.get('/api/shifts', (req, res) => {
 app.post('/api/shift/add', async (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
 
-    // Ay Kontrolü
+    // Aktif Ay Kontrolü
     const shiftMonth = shift_date.slice(0, 7);
-    const getActiveMonth = () => {
-        return new Promise((resolve) => {
-            db.get(`SELECT value FROM settings WHERE key = 'active_month'`, [], (err, row) => {
-                resolve(row ? row.value : null);
-            });
-        });
-    };
+    const activeMonthRow = await new Promise(resolve => {
+        db.get(`SELECT value FROM settings WHERE key = 'active_month'`, [], (err, row) => resolve(row));
+    });
+    const activeMonth = activeMonthRow ? activeMonthRow.value : null;
 
-    const activeMonth = await getActiveMonth();
     if (activeMonth && shiftMonth !== activeMonth) {
         return res.status(400).json({ error: `Sadece yöneticinin belirlediği aktif ay (${activeMonth}) için işlem yapabilirsiniz!` });
     }
 
-    const prevDate = addDays(shift_date, -1);
-    const prev2Date = addDays(shift_date, -2);
+    // Hekimin Rutin Nöbet ve Ek Mesai Tarihlerini Al
+    const mainDutyDates = new Set();
+    const shiftDates = new Set();
+    const allDutyDates = new Set();
 
-    const getDoctorDates = () => {
-        return new Promise((resolve) => {
-            const dates = new Set();
-            db.all(`SELECT duty_date as dDate FROM main_duties WHERE doctor_id = ? 
-                    UNION 
-                    SELECT shift_date as dDate FROM shifts WHERE doctor_id = ?`, [doctor_id, doctor_id], (err, rows) => {
-                if (rows) rows.forEach(r => dates.add(r.dDate));
-                resolve(dates);
-            });
+    await new Promise(resolve => {
+        db.all(`SELECT duty_date FROM main_duties WHERE doctor_id = ?`, [doctor_id], (err, rows) => {
+            if (rows) rows.forEach(r => { mainDutyDates.add(r.duty_date); allDutyDates.add(r.duty_date); });
+            resolve();
         });
-    };
+    });
 
-    const docDates = await getDoctorDates();
+    await new Promise(resolve => {
+        db.all(`SELECT shift_date FROM shifts WHERE doctor_id = ?`, [doctor_id], (err, rows) => {
+            if (rows) rows.forEach(r => { shiftDates.add(r.shift_date); allDutyDates.add(r.shift_date); });
+            resolve();
+        });
+    });
 
-    if (docDates.has(shift_date)) {
-        return res.status(400).json({ error: "Bu tarihte zaten asli nöbetiniz veya ek mesainiz bulunmaktadır!" });
+    // 1. KURAL: Rutin 24 Saatlik Nöbetin Olduğu Güne Ek Mesai Yazılamaz
+    if (mainDutyDates.has(shift_date)) {
+        return res.status(400).json({ error: "24 saatlik nöbetinizin olduğu güne ek mesai yazamazsınız!" });
     }
 
-    if (docDates.has(prevDate)) {
-        return res.status(400).json({ error: "Nöbet ertesi güne ek mesai yazamazsınız! (Dinlenme Günü)" });
+    // Aynı güne ikinci ek mesai yazılamaz
+    if (shiftDates.has(shift_date)) {
+        return res.status(400).json({ error: "Bu tarihte zaten tanımlı bir ek mesainiz bulunmaktadır!" });
     }
 
-    if (docDates.has(prev2Date) && docDates.has(prevDate)) {
-        return res.status(400).json({ error: "Ardışık 3 gün boyunca nöbet/ek mesai yazamazsınız!" });
+    // 2. KURAL: Rutin Nöbetin ERTESİ GÜNÜNE Ek Mesai Yazılamaz (Dinlenme Günü)
+    const prevDay = addDays(shift_date, -1);
+    if (mainDutyDates.has(prevDay)) {
+        return res.status(400).json({ error: "24 saatlik nöbetinizin ertesi gününe (dinlenme günü) ek mesai yazamazsınız!" });
     }
 
+    // 3. KURAL: Ardışık 3 Gün Üst Üste Görev Yapılamaz
+    // Durum A: (T-2, T-1, Seçilen Gün T) -> T-2 ve T-1 doluysa engelle
+    const dMinus1 = addDays(shift_date, -1);
+    const dMinus2 = addDays(shift_date, -2);
+    if (allDutyDates.has(dMinus1) && allDutyDates.has(dMinus2)) {
+        return res.status(400).json({ error: "Ardışık 3 gün üst üste takvime yazılınamaz!" });
+    }
+
+    // Durum B: (T-1, Seçilen Gün T, T+1) -> T-1 ve T+1 doluysa engelle
+    const dPlus1 = addDays(shift_date, 1);
+    if (allDutyDates.has(dMinus1) && allDutyDates.has(dPlus1)) {
+        return res.status(400).json({ error: "Bu tarih seçilirse ardışık 3 gün üst üste görev oluşur!" });
+    }
+
+    // Durum C: (Seçilen Gün T, T+1, T+2) -> T+1 ve T+2 doluysa engelle
+    const dPlus2 = addDays(shift_date, 2);
+    if (allDutyDates.has(dPlus1) && allDutyDates.has(dPlus2)) {
+        return res.status(400).json({ error: "Bu tarih seçilirse ardışık 3 gün üst üste görev oluşur!" });
+    }
+
+    // Alan Doluluk ve Limit Kontrolü
     db.get(`SELECT * FROM shifts WHERE shift_date = ? AND area = ?`, [shift_date, area], (err, areaCheck) => {
-        if (areaCheck) return res.status(400).json({ error: `Bu tarihte ${area} alanına zaten nöbet yazılmış!` });
+        if (areaCheck) return res.status(400).json({ error: `Bu tarihte ${area} alanına zaten ek mesai yazılmış!` });
 
         db.get(`SELECT value FROM settings WHERE key = 'max_shifts'`, [], (err2, limitRow) => {
             const maxLimit = parseInt(limitRow ? limitRow.value : '3');
@@ -231,7 +254,6 @@ app.delete('/api/shift/delete/:id', async (req, res) => {
     db.get(`SELECT * FROM shifts WHERE id = ?`, [shiftId], async (err, shift) => {
         if (!shift) return res.status(404).json({ error: "Ek mesai bulunamadı." });
 
-        // Ay Kontrolü (Hekim sadece aktif ayın mesaisini silebilir, yönetici her zaman silebilir)
         if (role !== 'admin') {
             if (shift.doctor_id !== doctor_id) {
                 return res.status(403).json({ error: "Sadece kendi ek mesainizi silebilirsiniz!" });
@@ -256,7 +278,7 @@ app.delete('/api/shift/delete/:id', async (req, res) => {
 
 app.delete('/api/admin/main-duty/:id', (req, res) => {
     db.run(`DELETE FROM main_duties WHERE id = ?`, [req.params.id], () => {
-        res.json({ message: "Rutin nöbet silindi." });
+        res.json({ message: "Rutin 24s nöbet silindi." });
     });
 });
 
