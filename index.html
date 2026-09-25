@@ -2,102 +2,129 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Acil Tıp - Tam Güvenlikli Ek Mesai Portalı</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acil Tıp - Ek Mesai Portalı</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
-        h1, h2 { color: #2c3e50; margin-top: 0; }
+        h1, h2, h3 { color: #2c3e50; margin-top: 0; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        
+        /* GİRİŞ EKRANI STİLLERİ */
+        #loginSection { max-width: 400px; margin: 50px auto; }
+        
+        /* PANEL STİLLERİ */
+        #mainPortal { display: none; }
         .container { display: flex; gap: 20px; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .form-card { flex: 1; }
         .list-card { flex: 2; }
         .admin-card { background: #eef9f5; border: 2px solid #27ae60; margin-bottom: 20px; padding: 15px; border-radius: 8px; display: none; }
+        
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
         select, input, button { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         button { background-color: #27ae60; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 10px; }
         button:hover { background-color: #219150; }
-        .btn-cancel { background-color: #e74c3c; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
-        .btn-cancel:hover { background-color: #c0392b; }
+        .btn-secondary { background-color: #7f8c8d; }
+        .btn-secondary:hover { background-color: #95a5a6; }
+        
         .error { color: #c0392b; background-color: #f9ebea; padding: 10px; border-radius: 4px; border: 1px solid #f5b7b1; margin-bottom: 15px; display: none; }
         .success { color: #27ae60; background-color: #eafaf1; padding: 10px; border-radius: 4px; border: 1px solid #a9dfbf; margin-bottom: 15px; display: none; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #2c3e50; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
-        .admin-toggle-btn { background: transparent; color: #7f8c8d; border: 1px dashed #bdc3c7; margin-top: 30px; font-weight: normal; font-size: 13px; }
-        .admin-toggle-btn:hover { background: #ecf0f1; color: #2c3e50; }
+        .user-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #fff; padding: 15px 20px; border-radius: 8px; }
     </style>
 </head>
 <body>
 
-    <h1>🏥 Bağcılar EAH Acil Tıp Kliniği - Ek Mesai Portalı</h1>
-    
-    <!-- YÖNETİCİ PANELİ (Varsayılan olarak gizlendi) -->
-    <div id="adminPanel" class="admin-card">
-        <h3>👑 Yönetici Paneli (Canlı Limit Düzenleme)</h3>
-        <p>Limit düşürülürse, hekimlerin en erken yazdığı ilk ek mesaileri korunur, kalanlar otomatik temizlenir.</p>
-        <select id="adminLimit" style="width: auto; display: inline-block;">
-            <option value="1">1 Ek Mesai</option>
-            <option value="2">2 Ek Mesai</option>
-            <option value="3" selected>3 Ek Mesai</option>
-            <option value="4">4 Ek Mesai</option>
-            <option value="5">5 Ek Mesai</option>
-        </select>
-        <button onclick="setAdminLimit()" style="width: auto; display: inline-block;">Limiti Uygula</button>
+    <!-- 1. GİRİŞ EKRANI (LOKAL VE MESAİ İÇİN ŞİFRELİ KAPISI) -->
+    <div id="loginSection" class="card">
+        <h2 style="text-align: center;">🏥 Hekim Giriş Portalı</h2>
+        <div id="loginError" class="error"></div>
+        
+        <div class="form-group">
+            <label>Hekim Adı:</label>
+            <select id="loginDoctorSelect"></select>
+        </div>
+        <div class="form-group">
+            <label>Şifre:</label>
+            <input type="password" id="loginPassword" placeholder="Şifrenizi giriniz (Varsayılan: 1234)">
+        </div>
+        <button onclick="handleLogin()">Giriş Yap</button>
+        <button onclick="toggleAdminMode()" class="btn-secondary" style="margin-top: 8px;">👑 Yönetici Girişi</button>
     </div>
 
-    <div class="container">
-        <!-- FORM -->
-        <div class="card form-card">
-            <h2>Ek Mesai Yaz</h2>
-            <div id="errorBox" class="error"></div>
-            <div id="successBox" class="success"></div>
-            
-            <div class="form-group">
-                <label>Hekim (Excel Listesi Tam İsim):</label>
-                <select id="doctorSelect"></select>
+    <!-- 2. ANA PORTAL (GİRİŞ YAPILDIKTAN SONRA AÇILIR) -->
+    <div id="mainPortal">
+        <div class="user-header card">
+            <div>
+                <span style="font-size: 18px; font-weight: bold;" id="activeUserName">Dr. -</span>
+                <span style="color: #7f8c8d; font-size: 14px; margin-left: 10px;">(Oturum Açıldı)</span>
             </div>
-            <div class="form-group">
-                <label>Tarih:</label>
-                <input type="date" id="shiftDate" min="2026-10-01" max="2026-10-31">
-            </div>
-            <div class="form-group">
-                <label>Alan (Maks 1 Kişi):</label>
-                <select id="areaSelect">
-                    <option value="KIRMIZI ALAN">Kırmızı Alan</option>
-                    <option value="TRAVMA">Travma</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Süre:</label>
-                <select id="durationSelect">
-                    <option value="12">12 Saat</option>
-                    <option value="16">16 Saat</option>
-                </select>
-            </div>
-            <button onclick="saveShift()">Ek Mesaiyi Kaydet (İlk Gelen Alır)</button>
+            <button onclick="handleLogout()" class="btn-secondary" style="width: auto; margin: 0; padding: 8px 15px;">Çıkış Yap</button>
         </div>
 
-        <!-- TABLO -->
-        <div class="card list-card">
-            <h2>Kayıtlı Ek Mesailer ve İptal Paneli</h2>
-            <table id="shiftTable">
-                <thead>
-                    <tr>
-                        <th>Tarih</th>
-                        <th>Hekim</th>
-                        <th>Alan</th>
-                        <th>Süre</th>
-                        <th>İşlem</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+        <!-- YÖNETİCİ PANELİ (Sadece Admin modunda görünür) -->
+        <div id="adminPanel" class="admin-card">
+            <h3>👑 Yönetici Paneli (Canlı Limit Düzenleme)</h3>
+            <p>Limit düşürülürse, hekimlerin en erken yazdığı ilk ek mesaileri korunur, kalanlar otomatik temizlenir.</p>
+            <select id="adminLimit" style="width: auto; display: inline-block;">
+                <option value="1">1 Ek Mesai</option>
+                <option value="2">2 Ek Mesai</option>
+                <option value="3" selected>3 Ek Mesai</option>
+                <option value="4">4 Ek Mesai</option>
+                <option value="5">5 Ek Mesai</option>
+            </select>
+            <button onclick="setAdminLimit()" style="width: auto; display: inline-block;">Limiti Uygula</button>
+        </div>
+
+        <div class="container">
+            <!-- FORM -->
+            <div class="card form-card">
+                <h2>Ek Mesai Yaz</h2>
+                <div id="errorBox" class="error"></div>
+                <div id="successBox" class="success"></div>
+                
+                <div class="form-group">
+                    <label>Tarih:</label>
+                    <input type="date" id="shiftDate" min="2026-10-01" max="2026-10-31">
+                </div>
+                <div class="form-group">
+                    <label>Alan (Maks 1 Kişi):</label>
+                    <select id="areaSelect">
+                        <option value="KIRMIZI ALAN">Kırmızı Alan</option>
+                        <option value="TRAVMA">Travma</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Süre:</label>
+                    <select id="durationSelect">
+                        <option value="12">12 Saat</option>
+                        <option value="16">16 Saat</option>
+                    </select>
+                </div>
+                <button onclick="saveShift()">Ek Mesaiyi Kaydet (İlk Gelen Alır)</button>
+            </div>
+
+            <!-- TABLO -->
+            <div class="card list-card">
+                <h2>Kayıtlı Ek Mesailer ve İptal Paneli</h2>
+                <table id="shiftTable">
+                    <thead>
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Hekim</th>
+                            <th>Alan</th>
+                            <th>Süre</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
     </div>
-
-    <!-- YÖNETİCİ GİRİŞİ BUTONU -->
-    <button class="admin-toggle-btn" onclick="toggleAdminPanel()">🔒 Yönetici Paneli Göster / Gizle</button>
 
 <script>
     const doctors = [
@@ -109,21 +136,59 @@
         "TÜRKAN ESİN", "MUSTAFA GÜLŞEN", "HÜRRE KÖSE", "SERAP ORAL"
     ];
 
-    const select = document.getElementById('doctorSelect');
+    let currentLoggedInUser = null;
+
+    // Hekim listesini doldur
+    const loginSelect = document.getElementById('loginDoctorSelect');
     doctors.forEach((doc, idx) => {
         let opt = document.createElement('option');
         opt.value = idx + 1;
         opt.innerText = doc;
-        select.appendChild(opt);
+        loginSelect.appendChild(opt);
     });
 
-    function toggleAdminPanel() {
-        const panel = document.getElementById('adminPanel');
-        if (panel.style.display === 'none' || panel.style.display === '') {
-            panel.style.display = 'block';
+    function handleLogin() {
+        const password = document.getElementById('loginPassword').value;
+        const selectedIndex = loginSelect.selectedIndex;
+        const selectedName = doctors[selectedIndex];
+
+        // Şifre Doğrulama (Varsayılan şifre: 1234)
+        if (password === "1234") {
+            currentLoggedInUser = { id: selectedIndex + 1, name: selectedName };
+            document.getElementById('activeUserName').innerText = "Dr. " + selectedName;
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('mainPortal').style.display = 'block';
+            document.getElementById('loginError').style.display = 'none';
         } else {
-            panel.style.display = 'none';
+            showLoginError("Hatalı şifre! (Varsayılan şifre: 1234)");
         }
+    }
+
+    function toggleAdminMode() {
+        const password = prompt("Yönetici Şifrenizi Giriniz:");
+        if (password === "admin123" || password === "1234") {
+            currentLoggedInUser = { id: 0, name: "Yönetici" };
+            document.getElementById('activeUserName').innerText = "👑 Yönetici Paneli";
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('mainPortal').style.display = 'block';
+            document.getElementById('adminPanel').style.display = 'block';
+        } else if (password !== null) {
+            alert("Hatalı Yönetici Şifresi!");
+        }
+    }
+
+    function handleLogout() {
+        currentLoggedInUser = null;
+        document.getElementById('loginPassword').value = '';
+        document.getElementById('loginSection').style.display = 'block';
+        document.getElementById('mainPortal').style.display = 'none';
+        document.getElementById('adminPanel').style.display = 'none';
+    }
+
+    function showLoginError(msg) {
+        const box = document.getElementById('loginError');
+        box.innerText = msg;
+        box.style.display = 'block';
     }
 
     async function setAdminLimit() {
@@ -134,14 +199,21 @@
             body: JSON.stringify({ newLimit })
         });
         const data = await res.json();
-        alert(data.message);
+        alert(data.message || "Limit güncellendi.");
     }
 
     async function saveShift() {
-        const doctor_id = document.getElementById('doctorSelect').value;
+        if (!currentLoggedInUser) return;
+
+        const doctor_id = currentLoggedInUser.id;
         const shift_date = document.getElementById('shiftDate').value;
         const area = document.getElementById('areaSelect').value;
         const duration = document.getElementById('durationSelect').value;
+
+        if (!shift_date) {
+            alert("Lütfen bir tarih seçiniz.");
+            return;
+        }
 
         const res = await fetch('/api/shift/add', {
             method: 'POST',
@@ -155,7 +227,7 @@
             document.getElementById('errorBox').style.display = 'block';
             document.getElementById('successBox').style.display = 'none';
         } else {
-            document.getElementById('successBox').innerText = data.message;
+            document.getElementById('successBox').innerText = data.message || "Ek mesai başarıyla kaydedildi.";
             document.getElementById('successBox').style.display = 'block';
             document.getElementById('errorBox').style.display = 'none';
         }
