@@ -3,19 +3,19 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Statik dosyaları dışa aç
-app.use(express.static(path.join(__dirname, 'public')));
+// Statik dosyaları doğrudan ana dizinden servis et
+app.use(express.static(__dirname));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 1. ANA SAYFA: Doğrudan Hekim/Kullanıcı Giriş Portalı
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 2. YÖNETİCİ PANELSİ: Sadece /admin adresinden erişilir
+// 2. YÖNETİCİ PANELİ: Sadece /admin adresinden erişilir
 app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 // Sunucuyu Başlat
