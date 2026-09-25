@@ -9,15 +9,25 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-const dbPath = './emergency_schedule.db';
+const dbPath = path.join(__dirname, 'emergency_schedule.db');
 
-// Veritabanı Kurulumu
+// Eski/Uyumsuz veritabanı dosyasını sil (Veritabanı açılmadan önce yapılmalı)
+if (fs.existsSync(dbPath)) {
+    try {
+        fs.unlinkSync(dbPath);
+        console.log("Eski veritabanı dosyası başarıyla temizlendi.");
+    } catch (err) {
+        console.error("Veritabanı dosyası silinemedi:", err.message);
+    }
+}
+
+// Veritabanı Bağlantısı (Dosya silindikten SONRA açılmalı)
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) console.error("Veritabanı hatası:", err.message);
-    else console.log("SQLite veritabanı bağlandı.");
+    else console.log("Yeni SQLite veritabanı oluşturuldu ve bağlandı.");
 });
 
-// Tabloları Oluştur
+// Tabloları ve Varsayılan Verileri Oluştur
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS doctors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +139,6 @@ app.post('/api/shift/add', async (req, res) => {
 
     const prevDate = addDays(shift_date, -1);
     const prev2Date = addDays(shift_date, -2);
-    const nextDate = addDays(shift_date, 1);
 
     // Hekimin Tüm Nöbetlerini Al (Rutin + Ek Mesai)
     const getDoctorDates = () => {
@@ -156,7 +165,7 @@ app.post('/api/shift/add', async (req, res) => {
         return res.status(400).json({ error: "Nöbet ertesi güne ek mesai yazamazsınız! (Dinlenme Günü)" });
     }
 
-    // KONTROL 3: Ardışık 3 gün engeli (Örn: 2 gün önce ve 1 gün önce nöbeti varmıydı ya da yarın ve öbür gün?)
+    // KONTROL 3: Ardışık 3 gün engeli
     if (docDates.has(prev2Date) && docDates.has(prevDate)) {
         return res.status(400).json({ error: "Ardışık 3 gün boyunca nöbet/ek mesai yazamazsınız!" });
     }
