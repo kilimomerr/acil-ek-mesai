@@ -18,11 +18,12 @@ const db = new sqlite3.Database(dbPath, (err) => {
     else console.log("SQLite veritabanı bağlandı.");
 });
 
-// Tablo Yapılandırmaları ve Sütun Kontrolleri
+// Tablo Yapılandırmaları ve Ekim 2026 Liste Aktarımı
 db.serialize(() => {
-    // GEÇİCİ SIRALAMA HAKKI / TABLO SIFIRLAMA:
-    // Eski hatalı şemaya sahip doctors tablosunu siler, güncel haliyle sıfırdan kurar.
+    // Mevcut tabloları sıfırlayıp yeni şema ve Ekim 2026 verileriyle kuruyoruz
     db.run(`DROP TABLE IF EXISTS doctors`);
+    db.run(`DROP TABLE IF EXISTS shifts`);
+    db.run(`DROP TABLE IF EXISTS main_duties`);
 
     db.run(`CREATE TABLE IF NOT EXISTS doctors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,28 +56,341 @@ db.serialize(() => {
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
 
-    // Sütun güncellemeleri (Eski veritabanı uyumluluğu için)
-    db.run(`ALTER TABLE shifts ADD COLUMN created_by TEXT DEFAULT 'user'`, () => {});
-    db.run(`ALTER TABLE main_duties ADD COLUMN created_by TEXT DEFAULT 'admin'`, () => {});
-
-    // Varsayılan Ayarlar
-    const currentMonthStr = new Date().toISOString().slice(0, 7);
-    db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_shifts', '3')`);
-    db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('active_month', '${currentMonthStr}')`);
+    // Aktif Ayı ve Limit Ayarlarını Tanımlama
+    db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('max_shifts', '3')`);
+    db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('active_month', '2026-10')`);
     db.run(`INSERT OR IGNORE INTO doctors (name, password, role) VALUES ('YÖNETİCİ', 'admin123', 'admin')`);
 
+    // Sadece Pratisyen Hekim Listesi (Uzmanlar Hariç)
     const initialDoctors = [
-        "BERİTAN ZÜMRÜT", "YASER HASAN BOLAT", "AHMET ÖZAY", "FATMA KÖLEOĞLU",
-        "ENES GÜLDEŞ", "ÖMER TARIK SARIBIYIK", "HALİL CAN DOĞAN", "SÜEDA YALÇIN",
-        "AHMET DÖNEN", "MUHAMMED ŞEN", "NİSANUR YALÇIN", "TUTKU SOYDAL",
-        "TUNAHAN KAYA", "YAKUP BORA PEKTAŞ", "ÖMER KİLİM", "BARAN NİKBAY",
-        "OĞUZCAN TÜFEKCİ", "ÖMER FARUK AKINCI", "SERKAN KANAT", "FARUK ARI",
-        "TÜRKAN ESİN", "MUSTAFA GÜLŞEN", "HÜRRE KÖSE", "SERAP ORAL"
+        "A.KARAKOÇ", "YASER", "TÜRKAN", "İPEK", "İMRAN", "E.EVGİN", "ÖZGÜR", "GÖKBERK", "M.ŞEN",
+        "B.DEMİRCİ", "YAKUP", "MÜCAHİT", "CEM", "ECE", "RAUF", "MEHMET", "OSMAN", "M.GÜLŞEN",
+        "E.ASLAN", "FATMA", "GAMZE", "AFRA", "HANİFE", "EMRECAN", "SAMET", "HÜRRE", "SERAP",
+        "P.ÖZATAK", "T.ÖZATAK", "B.CAM", "B.AKIN", "TUNAHAN", "MELİS", "SENA", "OĞUZCAN",
+        "Y.ÇELİK", "ÖMER", "HÜRRE", "NEDA", "TUTKU", "K.ÖZSİVRİ", "SÜEDA", "M.GÜLŞEN",
+        "F.ARİ", "E.USLU", "TARIK", "SERKAN", "ERKAN", "F.ÖZKAN", "YUNUS", "ESHAT", "MUKADDES",
+        "BERİTAN", "Ö.FARUK", "MUKADDES", "A.TEPE", "BERKE", "S.SOLAK", "A.DÖNEN",
+        "H.TURGUT", "NİSA", "MELİS", "B.SAĞLAM", "E.BAHAR", "KÜBRA", "E.FERHATLAR",
+        "HALİL", "OĞUZCAN", "GÖKBERK", "N.YAPAR", "BARAN", "S.KANAT", "BÜŞRA", "FARUK",
+        "MUSTAFA", "BERAN"
     ];
 
-    initialDoctors.forEach(doc => {
+    // Unique isimleri ekleme
+    const uniqueDocs = [...new Set(initialDoctors)];
+    uniqueDocs.forEach(doc => {
         db.run(`INSERT OR IGNORE INTO doctors (name, password, role) VALUES (?, '1234', 'doctor')`, [doc]);
     });
+
+    // Ekim 2026 Verilerini Ekleme Yardımcı Fonksiyonları
+    const getDocId = (name) => new Promise(resolve => {
+        db.get(`SELECT id FROM doctors WHERE name = ?`, [name], (err, row) => resolve(row ? row.id : null));
+    });
+
+    const addMainDuty = async (docName, dateStr) => {
+        const id = await getDocId(docName);
+        if (id) {
+            db.run(`INSERT INTO main_duties (doctor_id, duty_date, created_by) VALUES (?, ?, 'admin')`, [id, dateStr]);
+        }
+    };
+
+    const add16hShift = async (docName, dateStr, areaName) => {
+        const id = await getDocId(docName);
+        if (id) {
+            db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration, created_by) VALUES (?, ?, ?, 16, 'admin')`, [id, dateStr, areaName]);
+        }
+    };
+
+    // Ekim 2026 Nöbet ve Ek Mesai Dökümü
+    async function loadOctoberSchedule() {
+        const schedule = [
+            {
+                date: "2026-10-01",
+                main: ["A.KARAKOÇ", "YASER", "TÜRKAN", "İPEK", "İMRAN", "E.EVGİN", "ÖZGÜR", "TUTKU", "OĞUZCAN", "ERDEM", "E.BAHAR", "AHMET", "SERKAN", "BERKE"],
+                shifts16: [
+                    { name: "GÖKBERK", area: "Yeşil (2)" },
+                    { name: "M.ŞEN", area: "Yeşil Gözlem" },
+                    { name: "EMRECAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-02",
+                main: ["B.DEMİRCİ", "YAKUP", "MÜCAHİT", "CEM", "ECE", "RAUF", "MEHMET", "SÜEDA", "Ö.FARUK", "MUKADDES", "E.USLU", "HALİL", "ÖMER", "GÖKBERK"],
+                shifts16: [
+                    { name: "OSMAN", area: "Yeşil (2)" },
+                    { name: "M.GÜLŞEN", area: "Yeşil Gözlem" },
+                    { name: "FATMA", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-03",
+                main: ["E.ASLAN", "FATMA", "GAMZE", "AFRA", "HANİFE", "EMRECAN", "SAMET", "BERİTAN", "M.GÜLŞEN", "ESHAT", "F.ARİ", "TÜRKAN", "OSMAN"],
+                shifts16: [
+                    { name: "HÜRRE", area: "Yeşil (2)" },
+                    { name: "SERAP", area: "Yeşil Gözlem" },
+                    { name: "ERDEM", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-04",
+                main: ["P.ÖZATAK", "T.ÖZATAK", "B.CAM", "B.AKIN", "TUNAHAN", "MELİS", "SENA", "BARAN", "ELİF", "YUNUS", "YASER", "SERKAN", "ERDEM"],
+                shifts16: [
+                    { name: "İMRAN", area: "Yeşil (2)" },
+                    { name: "SÜEDA", area: "Yeşil Gözlem" },
+                    { name: "SÜEDA", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-05",
+                main: ["Y.ÇELİK", "ÖMER", "HÜRRE", "CEM", "RAUF", "NEDA", "ÖZGÜR", "M.ŞEN", "MÜCAHİT", "BERKE", "Ö.FARUK", "FATMA", "YAKUP", "GÖKBERK"],
+                shifts16: [
+                    { name: "TUTKU", area: "Yeşil (2)" },
+                    { name: "SAMET", area: "Yeşil Gözlem" },
+                    { name: "KÜBRA", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-06",
+                main: ["K.ÖZSİVRİ", "SÜEDA", "M.GÜLŞEN", "OSMAN", "ECE", "EMRECAN", "SAMET", "BERİTAN", "SERAP", "KÜBRA", "E.ASLAN", "AHMET", "TUTKU", "İMRAN"],
+                shifts16: [
+                    { name: "F.ARİ", area: "Yeşil (2)" },
+                    { name: "SENA", area: "Yeşil Gözlem" },
+                    { name: "TÜRKAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-07",
+                main: ["E.USLU", "TARIK", "SERKAN", "ERKAN", "F.ÖZKAN", "YUNUS", "MEHMET", "NİSA", "GAMZE", "SENA", "A.KARAKOÇ", "FATMA", "TUNAHAN", "ERDEM"],
+                shifts16: [
+                    { name: "ESHAT", area: "Yeşil (2)" },
+                    { name: "MUKADDES", area: "Yeşil Gözlem" },
+                    { name: "YAKUP", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-08",
+                main: ["BERİTAN", "Ö.FARUK", "HÜRRE", "MUKADDES", "A.TEPE", "BERKE", "NEDA", "ÖMER", "OĞUZCAN", "GÖKBERK", "E.FERHATLAR", "HALİL", "YAKUP", "MÜCAHİT"],
+                shifts16: [
+                    { name: "SÜEDA", area: "Yeşil (2)" },
+                    { name: "ÖZGÜR", area: "Yeşil Gözlem" },
+                    { name: "BARAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-09",
+                main: ["B.SATILMIŞ", "A.DÖNEN", "OSMAN", "CEM", "EMRECAN", "SAMET", "ÖZGÜR", "YASER", "BARAN", "ESHAT", "N.YAPAR", "E.GÜLDEŞ", "F.ARİ", "SENA"],
+                shifts16: [
+                    { name: "TÜRKAN", area: "Yeşil (2)" },
+                    { name: "YUNUS", area: "Yeşil Gözlem" },
+                    { name: "M.ŞEN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-10",
+                main: ["H.TURGUT", "NİSA", "MELİS", "ERKAN", "İPEK", "BÜŞRA", "MEHMET", "FATMA", "SERAP", "KÜBRA", "TARIK", "TÜRKAN", "F.ÖZKAN"],
+                shifts16: [
+                    { name: "RAUF", area: "Yeşil (2)" },
+                    { name: "ECE", area: "Yeşil Gözlem" },
+                    { name: "GAMZE", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-11",
+                main: ["E.BAHAR", "YAKUP", "SÜEDA", "AFRA", "HANİFE", "BERKE", "RAUF", "M.ŞEN", "SERKAN", "ERDEM", "O.UZUN", "HALİL", "ÖMER", "İMRAN"],
+                shifts16: [
+                    { name: "CEM", area: "Yeşil (2)" },
+                    { name: "A.DÖNEN", area: "Yeşil Gözlem" },
+                    { name: "BERİTAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-12",
+                main: ["G.AYDIN", "SÜEDA", "M.GÜLŞEN", "YUNUS", "SENA", "A.TEPE", "ÖZGÜR", "A.DÖNEN", "F.ARİ", "CEM", "B.SATILMIŞ", "BERİTAN", "TUTKU", "ESHAT"],
+                shifts16: [
+                    { name: "SERAP", area: "Yeşil (2)" },
+                    { name: "GÖKBERK", area: "Yeşil Gözlem" },
+                    { name: "YASER", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-13",
+                main: ["E.ASLAN", "B.AYVACI", "H.TURGUT", "N.YAPAR", "M.ŞEN", "GAMZE", "KÜBRA", "TUNAHAN", "TÜRKAN", "F.ÖZKAN", "NİSA", "E.GÜLDEŞ", "BARAN", "SERAP"],
+                shifts16: [
+                    { name: "MEHMET", area: "Yeşil (2)" },
+                    { name: "MÜCAHİT", area: "Yeşil Gözlem" },
+                    { name: "İMRAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-14",
+                main: ["HALİL", "OĞUZCAN", "GÖKBERK", "MUKADDES", "ECE", "NEDA", "MEHMET", "ÖMER", "HÜRRE", "İMRAN", "A.KARAKOÇ", "FATMA", "YAKUP", "MÜCAHİT"],
+                shifts16: [
+                    { name: "A.TEPE", area: "Yeşil (2)" },
+                    { name: "ESHAT", area: "Yeşil Gözlem" },
+                    { name: "OSMAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-15",
+                main: ["Ö.UZUN", "AHMET", "F.ARİ", "ESHAT", "ERDEM", "SAMET", "MÜCAHİT", "SÜEDA", "M.GÜLŞEN", "OSMAN", "E.BAHAR", "BERİTAN", "TUTKU", "YUNUS"],
+                shifts16: [
+                    { name: "Ö.FARUK", area: "Yeşil (2)" },
+                    { name: "CEM", area: "Yeşil Gözlem" },
+                    { name: "TUNAHAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-16",
+                main: ["N.YAPAR", "NİSA", "SERKAN", "F.ÖZKAN", "KÜBRA", "A.TEPE", "RAUF", "E.GÜLDEŞ", "GAMZE", "BERKE", "BARAN", "TARIK", "TUNAHAN", "SERAP"],
+                shifts16: [
+                    { name: "YAKUP", area: "Yeşil (2)" },
+                    { name: "A.DÖNEN", area: "Yeşil Gözlem" },
+                    { name: "ÖMER", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-17",
+                main: ["P.ÖZATAK", "HALİL", "ERKAN", "İPEK", "BÜŞRA", "NEDA", "MEHMET", "YAKUP", "HÜRRE", "CEM", "ÖMER", "M.ŞEN", "Ö.FARUK", "MUKADDES"],
+                shifts16: [
+                    { name: "ERDEM", area: "Yeşil (2)" },
+                    { name: "SENA", area: "Yeşil Gözlem" },
+                    { name: "TUTKU", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-18",
+                main: ["YASER", "SERAP", "MELİS", "GÖKBERK", "HANİFE", "EMRECAN", "ÖZGÜR", "AHMET", "MÜCAHİT", "ECE", "TUTKU", "SÜEDA", "OĞUZCAN", "YUNUS"],
+                shifts16: [
+                    { name: "SAMET", area: "Yeşil (2)" },
+                    { name: "A.TEPE", area: "Yeşil Gözlem" },
+                    { name: "E.GÜLDEŞ", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-19",
+                main: ["S.SOLAK", "G.AYDIN", "K.ÖZSİVRİ", "A.KARAKOÇ", "A.DÖNEN", "İMRAN", "SAMET", "TARIK", "TÜRKAN", "F.ÖZKAN", "B.CAM", "NİSA", "SERKAN", "KÜBRA"],
+                shifts16: [
+                    { name: "MEHMET", area: "Yeşil (2)" },
+                    { name: "MEHMET", area: "Yeşil Gözlem" },
+                    { name: "HALİL", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-20",
+                main: ["E.FERHATLAR", "ÖMER", "M.GÜLŞEN", "GAMZE", "ESHAT", "SENA", "NEDA", "YAKUP", "HÜRRE", "MUKADDES", "TUNAHAN", "M.ŞEN", "Ö.FARUK", "A.TEPE"],
+                shifts16: [
+                    { name: "YUNUS", area: "Yeşil (2)" },
+                    { name: "SÜEDA", area: "Yeşil Gözlem" },
+                    { name: "RAUF", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-21",
+                main: ["Ö.HİNCAL", "BARAN", "ELİF", "BÜŞRA", "YUNUS", "RAUF", "AHMET", "YASER", "F.ARİ", "OSMAN", "Y.ÇELİK", "AHMET", "OĞUZCAN", "ECE"],
+                shifts16: [
+                    { name: "MÜCAHİT", area: "Yeşil (2)" },
+                    { name: "HALİL", area: "Yeşil Gözlem" },
+                    { name: "NİSA", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-22",
+                main: ["T.ÖZATAK", "TUTKU", "SERAP", "İMRAN", "ERDEM", "BERKE", "HALİL", "SERKAN", "CEM", "FATMA", "TÜRKAN", "M.ŞEN", "HÜRRE", "F.ÖZKAN"],
+                shifts16: [
+                    { name: "M.GÜLŞEN", area: "Yeşil (2)" },
+                    { name: "YAKUP", area: "Yeşil Gözlem" },
+                    { name: "Ö.FARUK", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-23",
+                main: ["B.CAM", "TUNAHAN", "ESHAT", "SENA", "EMRECAN", "SAMET", "MEHMET", "E.GÜLDEŞ", "GÖKBERK", "A.TEPE", "B.AYVACI", "A.DÖNEN", "M.GÜLŞEN", "KÜBRA"],
+                shifts16: [
+                    { name: "BARAN", area: "Yeşil (2)" },
+                    { name: "F.ARİ", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-24",
+                main: ["Y.ÇELİK", "Ö.UZUN", "E.FERHATLAR", "BARAN", "OSMAN", "BERKE", "ÖZGÜR", "TARIK", "MÜCAHİT", "AHMET", "OĞUZCAN", "NİSA", "F.ARİ", "GAMZE"],
+                shifts16: [
+                    { name: "NEDA", area: "Yeşil (2)" },
+                    { name: "ECE", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-25",
+                main: ["S.SOLAK", "E.GÜLDEŞ", "Ö.FARUK", "KÜBRA", "ESHAT", "MEHMET", "TUNAHAN", "GÖKBERK", "E.USLU", "A.DÖNEN", "M.GÜLŞEN", "SENA"],
+                shifts16: [
+                    { name: "EMRECAN", area: "Yeşil (2)" },
+                    { name: "A.TEPE", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-26",
+                main: ["B.AYVACI", "TARIK", "MÜCAHİT", "MUKADDES", "ECE", "RAUF", "EMRECAN", "AHMET", "F.ARİ", "OSMAN", "N.YAPAR", "NİSA", "BARAN", "GAMZE"],
+                shifts16: [
+                    { name: "OĞUZCAN", area: "Yeşil (2)" },
+                    { name: "NEDA", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-27",
+                main: ["B.AKIN", "M.ŞEN", "HÜRRE", "İMRAN", "ERDEM", "BERKE", "NEDA", "FATMA", "TÜRKAN", "YUNUS", "T.ÖZATAK", "SÜEDA", "OĞUZCAN", "CEM"],
+                shifts16: [
+                    { name: "E.ASLAN", area: "Yeşil (2)" },
+                    { name: "SERKAN", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-28",
+                main: ["E.BAHAR", "Ö.HİNCAL", "E.USLU", "B.SATILMIŞ", "TUTKU", "SERAP", "GÖKBERK", "A.TEPE", "HALİL", "ERKAN", "Ö.FARUK", "YASER", "M.GÜLŞEN", "E.GÜLDEŞ", "TUNAHAN", "ESHAT"],
+                shifts16: [
+                    { name: "SENA", area: "Yeşil (2)" },
+                    { name: "AHMET", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-29",
+                main: ["AHMET", "F.ARİ", "MÜCAHİT", "ECE", "HANİFE", "SAMET", "MEHMET", "NİSA", "GAMZE", "KÜBRA", "SERKAN", "TARIK", "BARAN", "OSMAN"],
+                shifts16: [
+                    { name: "FATMA", area: "Yeşil (2)" },
+                    { name: "HÜRRE", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-30",
+                main: ["FATMA", "OĞUZCAN", "TÜRKAN", "YUNUS", "ERDEM", "RAUF", "EMRECAN", "A.DÖNEN", "Ö.FARUK", "SENA", "YAKUP", "YASER", "ÖMER", "MUKADDES"],
+                shifts16: [
+                    { name: "F.ÖZKAN", area: "Yeşil (2)" },
+                    { name: "BERKE", area: "Sarı Alan 4. Sütun" }
+                ]
+            },
+            {
+                date: "2026-10-31",
+                main: ["E.GÜLDEŞ", "ELİF", "BÜŞRA", "AFRA", "A.TEPE", "BERKE", "NEDA", "TUTKU", "SERAP", "İMRAN", "B.SATILMIŞ", "SÜEDA", "HÜRRE", "CEM"],
+                shifts16: [
+                    { name: "NİSA", area: "Yeşil (2)" },
+                    { name: "TARIK", area: "Sarı Alan 4. Sütun" }
+                ]
+            }
+        ];
+
+        for (const item of schedule) {
+            if (item.main) {
+                for (const doc of item.main) {
+                    await addMainDuty(doc, item.date);
+                }
+            }
+            if (item.shifts16) {
+                for (const shift of item.shifts16) {
+                    await add16hShift(shift.name, item.date, shift.area);
+                }
+            }
+        }
+        console.log("Ekim 2026 nöbetleri ve ek mesaileri başarıyla yüklendi.");
+    }
+
+    loadOctoberSchedule();
 });
 
 function addDays(dateStr, days) {
@@ -132,7 +446,6 @@ app.post('/api/admin/set-limit', (req, res) => {
     });
 });
 
-// Yönetici Tarafından Rutin Nöbet Ekleme (created_by = 'admin')
 app.post('/api/admin/add-main-duty', (req, res) => {
     const { doctor_id, duty_date } = req.body;
     if (!doctor_id || !duty_date) return res.status(400).json({ error: "Eksik bilgi." });
@@ -143,7 +456,6 @@ app.post('/api/admin/add-main-duty', (req, res) => {
     });
 });
 
-// Yönetici Tarafından Ek Mesai Ekleme (created_by = 'admin')
 app.post('/api/admin/add-shift', (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
     if (!doctor_id || !shift_date || !area || !duration) return res.status(400).json({ error: "Eksik bilgi." });
@@ -169,7 +481,6 @@ app.get('/api/shifts', (req, res) => {
     db.all(sql, [], (err, rows) => res.json(rows || []));
 });
 
-// HEKİM TARAFINDAN EK MESAİ EKLEME (created_by = 'user')
 app.post('/api/shift/add', async (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
 
@@ -250,7 +561,6 @@ app.post('/api/shift/add', async (req, res) => {
     });
 });
 
-// SİLME İŞLEMİ (Yöneticinin eklediğini hekim silemez)
 app.delete('/api/shift/delete/:id', async (req, res) => {
     const shiftId = req.params.id;
     const { doctor_id, role } = req.body;
@@ -290,7 +600,6 @@ app.delete('/api/admin/main-duty/:id', (req, res) => {
     });
 });
 
-// YÖNETİCİ EXCEL ÇIKTISI ALMA
 app.get('/api/admin/export-excel', async (req, res) => {
     try {
         const workbook = new ExcelJS.Workbook();
