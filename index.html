@@ -65,7 +65,7 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">Hekime Asli/Rutin Nöbet Ekle</label>
+                        <label class="form-label small">Hekime 24 Saatlik Rutin Nöbet Ekle</label>
                         <div class="row g-2">
                             <div class="col-md-5">
                                 <select id="mainDutyDoctor" class="form-select"></select>
@@ -74,7 +74,7 @@
                                 <input type="date" id="mainDutyDate" class="form-control">
                             </div>
                             <div class="col-md-3">
-                                <button onclick="addMainDuty()" class="btn btn-success w-100">Rutin Ekle</button>
+                                <button onclick="addMainDuty()" class="btn btn-success w-100">Nöbet Ekle</button>
                             </div>
                         </div>
                     </div>
@@ -118,8 +118,8 @@
                     <!-- BİLGİ KUTUSU -->
                     <div class="card p-3 bg-light">
                         <h6>📌 Takvim Renk Kodları</h6>
-                        <span class="badge bg-secondary mb-1">Grey: Rutin Nöbetler</span>
-                        <span class="badge bg-primary">Blue: Ek Mesailer</span>
+                        <span class="badge bg-secondary mb-1">Gri: Rutin 24 Sa Nöbet</span>
+                        <span class="badge bg-primary">Mavi: Ek Mesai (12s/16s)</span>
                     </div>
                 </div>
 
@@ -225,7 +225,7 @@
             const shifts = await shiftsRes.json();
             const duties = await dutiesRes.json();
 
-            // Ek Mesailerim Listesini Doldur
+            // Ek Mesailerim Listesi
             const myShifts = shifts.filter(s => s.doctor_id === currentUser.id);
             const listEl = document.getElementById('myShiftsList');
             if (myShifts.length === 0) {
@@ -244,7 +244,7 @@
 
             const events = [
                 ...duties.map(d => ({
-                    title: `📋 ${d.doctor_name} (Rutin)`,
+                    title: `📋 ${d.doctor_name} (24 Sa Nöbet)`,
                     start: d.duty_date,
                     color: '#6c757d'
                 })),
