@@ -20,6 +20,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Tablo Yapılandırmaları ve Sütun Kontrolleri
 db.serialize(() => {
+    // GEÇİCİ SIRALAMA HAKKI / TABLO SIFIRLAMA:
+    // Eski hatalı şemaya sahip doctors tablosunu siler, güncel haliyle sıfırdan kurar.
+    db.run(`DROP TABLE IF EXISTS doctors`);
+
     db.run(`CREATE TABLE IF NOT EXISTS doctors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
