@@ -11,23 +11,22 @@ app.use(express.static(path.join(__dirname)));
 
 const dbPath = path.join(__dirname, 'emergency_schedule.db');
 
-// Eski/Uyumsuz veritabanı dosyasını sil (Veritabanı açılmadan önce yapılmalı)
+// Eski veritabanı temizleme
 if (fs.existsSync(dbPath)) {
     try {
         fs.unlinkSync(dbPath);
-        console.log("Eski veritabanı dosyası başarıyla temizlendi.");
+        console.log("Eski veritabanı dosyası temizlendi.");
     } catch (err) {
-        console.error("Veritabanı dosyası silinemedi:", err.message);
+        console.error("Veritabanı silinemedi:", err.message);
     }
 }
 
-// Veritabanı Bağlantısı (Dosya silindikten SONRA açılmalı)
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) console.error("Veritabanı hatası:", err.message);
-    else console.log("Yeni SQLite veritabanı oluşturuldu ve bağlandı.");
+    else console.log("Yeni SQLite veritabanı bağlandı.");
 });
 
-// Tabloları ve Varsayılan Verileri Oluştur
+// Tablo Yapılandırmaları
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS doctors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +57,10 @@ db.serialize(() => {
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
 
+    // Varsayılan Ayarlar (Varsayılan aktif ay: içinde bulunulan YYYY-MM)
+    const currentMonthStr = new Date().toISOString().slice(0, 7);
     db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('max_shifts', '3')`);
+    db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('active_month', '${currentMonthStr}')`);
     db.run(`INSERT OR IGNORE INTO doctors (name, password, role) VALUES ('YÖNETİCİ', 'admin123', 'admin')`);
 
     const initialDoctors = [
@@ -75,7 +77,6 @@ db.serialize(() => {
     });
 });
 
-// Helper: Tarih İşlemleri (Önceki/Sonraki Gün Bulma)
 function addDays(dateStr, days) {
     const d = new Date(dateStr);
     d.setDate(d.getDate() + days);
@@ -108,7 +109,28 @@ app.get('/api/doctors', (req, res) => {
     });
 });
 
-// Yönetici: Rutin Nöbet Ekle
+app.get('/api/settings', (req, res) => {
+    db.all(`SELECT * FROM settings`, [], (err, rows) => {
+        const settings = {};
+        if (rows) rows.forEach(r => settings[r.key] = r.value);
+        res.json(settings);
+    });
+});
+
+// Yönetici Ayarları
+app.post('/api/admin/set-active-month', (req, res) => {
+    const { activeMonth } = req.body;
+    db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('active_month', ?)`, [activeMonth], () => {
+        res.json({ message: "İşlem ayı güncellendi." });
+    });
+});
+
+app.post('/api/admin/set-limit', (req, res) => {
+    db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('max_shifts', ?)`, [req.body.newLimit], () => {
+        res.json({ message: "Limit güncellendi." });
+    });
+});
+
 app.post('/api/admin/add-main-duty', (req, res) => {
     const { doctor_id, duty_date } = req.body;
     if (!doctor_id || !duty_date) return res.status(400).json({ error: "Eksik bilgi." });
@@ -133,14 +155,28 @@ app.get('/api/shifts', (req, res) => {
     db.all(sql, [], (err, rows) => res.json(rows || []));
 });
 
-// GELİŞMİŞ KONTROLLÜ EK MESAİ EKLEME
+// KONTROLLÜ EK MESAİ EKLEME
 app.post('/api/shift/add', async (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
+
+    // Ay Kontrolü
+    const shiftMonth = shift_date.slice(0, 7);
+    const getActiveMonth = () => {
+        return new Promise((resolve) => {
+            db.get(`SELECT value FROM settings WHERE key = 'active_month'`, [], (err, row) => {
+                resolve(row ? row.value : null);
+            });
+        });
+    };
+
+    const activeMonth = await getActiveMonth();
+    if (activeMonth && shiftMonth !== activeMonth) {
+        return res.status(400).json({ error: `Sadece yöneticinin belirlediği aktif ay (${activeMonth}) için işlem yapabilirsiniz!` });
+    }
 
     const prevDate = addDays(shift_date, -1);
     const prev2Date = addDays(shift_date, -2);
 
-    // Hekimin Tüm Nöbetlerini Al (Rutin + Ek Mesai)
     const getDoctorDates = () => {
         return new Promise((resolve) => {
             const dates = new Set();
@@ -155,26 +191,21 @@ app.post('/api/shift/add', async (req, res) => {
 
     const docDates = await getDoctorDates();
 
-    // KONTROL 1: O gün zaten rutin veya ek nöbeti var mı?
     if (docDates.has(shift_date)) {
         return res.status(400).json({ error: "Bu tarihte zaten asli nöbetiniz veya ek mesainiz bulunmaktadır!" });
     }
 
-    // KONTROL 2: Nöbet ertesi gün mü? (Önceki gün nöbetçi miydi?)
     if (docDates.has(prevDate)) {
         return res.status(400).json({ error: "Nöbet ertesi güne ek mesai yazamazsınız! (Dinlenme Günü)" });
     }
 
-    // KONTROL 3: Ardışık 3 gün engeli
     if (docDates.has(prev2Date) && docDates.has(prevDate)) {
         return res.status(400).json({ error: "Ardışık 3 gün boyunca nöbet/ek mesai yazamazsınız!" });
     }
 
-    // KONTROL 4: O alana o gün başkası yazılmış mı?
     db.get(`SELECT * FROM shifts WHERE shift_date = ? AND area = ?`, [shift_date, area], (err, areaCheck) => {
         if (areaCheck) return res.status(400).json({ error: `Bu tarihte ${area} alanına zaten nöbet yazılmış!` });
 
-        // KONTROL 5: Canlı Ek Mesai Limiti Kontrolü
         db.get(`SELECT value FROM settings WHERE key = 'max_shifts'`, [], (err2, limitRow) => {
             const maxLimit = parseInt(limitRow ? limitRow.value : '3');
             db.get(`SELECT COUNT(*) as count FROM shifts WHERE doctor_id = ?`, [doctor_id], (err3, countRow) => {
@@ -182,7 +213,6 @@ app.post('/api/shift/add', async (req, res) => {
                     return res.status(400).json({ error: `Belirlenen ek mesai limitine (${maxLimit}) ulaştınız!` });
                 }
 
-                // Kaydet
                 db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration) VALUES (?, ?, ?, ?)`, 
                     [doctor_id, shift_date, area, duration], (err4) => {
                     if (err4) return res.status(500).json({ error: "Mesai kaydedilemedi." });
@@ -193,21 +223,40 @@ app.post('/api/shift/add', async (req, res) => {
     });
 });
 
-app.delete('/api/shift/delete/:id', (req, res) => {
-    db.run(`DELETE FROM shifts WHERE id = ?`, [req.params.id], () => {
-        res.json({ message: "Ek mesai silindi." });
+// EK MESAİ İPTAL/SİLME
+app.delete('/api/shift/delete/:id', async (req, res) => {
+    const shiftId = req.params.id;
+    const { doctor_id, role } = req.body;
+
+    db.get(`SELECT * FROM shifts WHERE id = ?`, [shiftId], async (err, shift) => {
+        if (!shift) return res.status(404).json({ error: "Ek mesai bulunamadı." });
+
+        // Ay Kontrolü (Hekim sadece aktif ayın mesaisini silebilir, yönetici her zaman silebilir)
+        if (role !== 'admin') {
+            if (shift.doctor_id !== doctor_id) {
+                return res.status(403).json({ error: "Sadece kendi ek mesainizi silebilirsiniz!" });
+            }
+
+            const shiftMonth = shift.shift_date.slice(0, 7);
+            const activeMonthRow = await new Promise(resolve => {
+                db.get(`SELECT value FROM settings WHERE key = 'active_month'`, [], (e, r) => resolve(r));
+            });
+            const activeMonth = activeMonthRow ? activeMonthRow.value : null;
+
+            if (activeMonth && shiftMonth !== activeMonth) {
+                return res.status(400).json({ error: `Geçmiş/Gelecek aylara ait ek mesaileri silemezsiniz! (Aktif Ay: ${activeMonth})` });
+            }
+        }
+
+        db.run(`DELETE FROM shifts WHERE id = ?`, [shiftId], () => {
+            res.json({ message: "Ek mesainiz iptal edildi." });
+        });
     });
 });
 
 app.delete('/api/admin/main-duty/:id', (req, res) => {
     db.run(`DELETE FROM main_duties WHERE id = ?`, [req.params.id], () => {
         res.json({ message: "Rutin nöbet silindi." });
-    });
-});
-
-app.post('/api/admin/set-limit', (req, res) => {
-    db.run(`UPDATE settings SET value = ? WHERE key = 'max_shifts'`, [req.body.newLimit], () => {
-        res.json({ message: "Limit güncellendi." });
     });
 });
 
