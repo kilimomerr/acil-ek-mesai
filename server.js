@@ -9,16 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Eski/Uyumsuz veritabanı dosyasını otomatik sil (Hata almamak için)
 const dbPath = './emergency_schedule.db';
-if (fs.existsSync(dbPath)) {
-    try {
-        fs.unlinkSync(dbPath);
-        console.log("Eski veritabanı başarıyla silindi, yenisi oluşturuluyor...");
-    } catch (err) {
-        console.error("Eski veritabanı silinirken hata:", err.message);
-    }
-}
 
 // Veritabanı Kurulumu
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -50,6 +41,14 @@ db.serialize(() => {
         area TEXT NOT NULL,
         duration INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (doctor_id) REFERENCES doctors(id)
+    )`);
+
+    // Rutin/Asıl Nöbetler Tablosu (Yöneticinin yüklediği ana nöbetler)
+    db.run(`CREATE TABLE IF NOT EXISTS main_duties (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doctor_id INTEGER,
+        duty_date TEXT NOT NULL,
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
 
@@ -85,7 +84,7 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// 2. Şifre Değiştir (Hekim Kendisi)
+// 2. Şifre Değiştir
 app.post('/api/change-password', (req, res) => {
     const { doctor_id, oldPassword, newPassword } = req.body;
     db.get(`SELECT * FROM doctors WHERE id = ? AND password = ?`, [doctor_id, oldPassword], (err, row) => {
@@ -104,36 +103,38 @@ app.get('/api/doctors', (req, res) => {
     });
 });
 
-// 4. Tüm Kullanıcıları ve Şifreleri Getir (Yönetici)
-app.get('/api/admin/users', (req, res) => {
-    db.all(`SELECT id, name, password, role FROM doctors WHERE role != 'admin' ORDER BY name ASC`, [], (err, rows) => {
+// 4. Yönetici: Rutin Nöbet Tanımla
+app.post('/api/admin/add-main-duty', (req, res) => {
+    const { doctor_id, duty_date } = req.body;
+    if (!doctor_id || !duty_date) return res.status(400).json({ error: "Eksik bilgi." });
+
+    db.get(`SELECT * FROM main_duties WHERE doctor_id = ? AND duty_date = ?`, [doctor_id, duty_date], (err, row) => {
+        if (row) return res.status(400).json({ error: "Bu hekim bu tarihte zaten rutin nöbetçi." });
+
+        db.run(`INSERT INTO main_duties (doctor_id, duty_date) VALUES (?, ?)`, [doctor_id, duty_date], (err2) => {
+            if (err2) return res.status(500).json({ error: "Nöbet kaydedilemedi." });
+            res.json({ message: "Rutin nöbet kaydı eklendi." });
+        });
+    });
+});
+
+// 5. Rutin Nöbetleri Getir
+app.get('/api/main-duties', (req, res) => {
+    const sql = `SELECT main_duties.id, main_duties.doctor_id, main_duties.duty_date, doctors.name as doctor_name 
+                 FROM main_duties 
+                 JOIN doctors ON main_duties.doctor_id = doctors.id 
+                 ORDER BY main_duties.duty_date ASC`;
+    db.all(sql, [], (err, rows) => {
         res.json(rows || []);
     });
 });
 
-// 5. Tekli Yeni Asistan / Hekim Ekle
-app.post('/api/admin/add-doctor', (req, res) => {
-    const { name, password } = req.body;
-    if (!name || !password) return res.status(400).json({ error: "Ad ve şifre zorunludur." });
-    db.run(`INSERT INTO doctors (name, password, role) VALUES (?, ?, 'doctor')`, [name.toUpperCase(), password], function(err) {
-        if (err) return res.status(400).json({ error: "Bu isimde hekim zaten kayıtlı." });
-        res.json({ message: "Yeni asistan başarıyla eklendi." });
+// 6. Rutin Nöbet Sil (Yönetici)
+app.delete('/api/admin/main-duty/:id', (req, res) => {
+    db.run(`DELETE FROM main_duties WHERE id = ?`, [req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: "Silme başarısız." });
+        res.json({ message: "Rutin nöbet silindi." });
     });
-});
-
-// 6. Toplu Hekim / Ay Yükleme
-app.post('/api/admin/bulk-upload-doctors', (req, res) => {
-    const { doctorNames, defaultPassword } = req.body;
-    if (!Array.isArray(doctorNames) || doctorNames.length === 0) {
-        return res.status(400).json({ error: "Geçerli bir hekim listesi giriniz." });
-    }
-    const initialPass = defaultPassword && defaultPassword.trim() !== '' ? defaultPassword.trim() : '1234';
-    const stmt = db.prepare(`INSERT OR IGNORE INTO doctors (name, password, role) VALUES (?, ?, 'doctor')`);
-    doctorNames.forEach(name => {
-        if (name.trim()) stmt.run(name.trim().toUpperCase(), initialPass);
-    });
-    stmt.finalize();
-    res.json({ message: `${doctorNames.length} hekim sisteme başarıyla yüklendi.` });
 });
 
 // 7. Ek Mesaileri Getir
@@ -147,24 +148,43 @@ app.get('/api/shifts', (req, res) => {
     });
 });
 
-// 8. Ek Mesai Ekle
+// 8. Ek Mesai Ekle (KONTROLLER EKLENDİ)
 app.post('/api/shift/add', (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
 
-    db.get(`SELECT * FROM shifts WHERE shift_date = ? AND area = ?`, [shift_date, area], (err, areaCheck) => {
-        if (areaCheck) return res.status(400).json({ error: `Bu tarihte ${area} alanına zaten nöbet yazılmış!` });
+    // KONTROL 1: Hekim o gün zaten rutin nöbetçi mi?
+    db.get(`SELECT * FROM main_duties WHERE doctor_id = ? AND duty_date = ?`, [doctor_id, shift_date], (err, mainDuty) => {
+        if (mainDuty) {
+            return res.status(400).json({ error: "Bu tarihte zaten asli/rutin nöbetiniz bulunmaktadır! Ek mesai alamazsınız." });
+        }
 
-        db.get(`SELECT value FROM settings WHERE key = 'max_shifts'`, [], (err2, limitRow) => {
-            const maxLimit = parseInt(limitRow ? limitRow.value : '3');
-            db.get(`SELECT COUNT(*) as count FROM shifts WHERE doctor_id = ?`, [doctor_id], (err3, countRow) => {
-                if (countRow.count >= maxLimit) {
-                    return res.status(400).json({ error: `Belirlenen ek mesai limitine (${maxLimit}) ulaştınız!` });
+        // KONTROL 2: Hekim o tarihte zaten başka bir ek mesai yazmış mı?
+        db.get(`SELECT * FROM shifts WHERE doctor_id = ? AND shift_date = ?`, [doctor_id, shift_date], (err2, userShift) => {
+            if (userShift) {
+                return res.status(400).json({ error: "Aynı gün içerisinde 2 defa ek mesai yazamazsınız!" });
+            }
+
+            // KONTROL 3: O tarihte o alana başka biri yazılmış mı?
+            db.get(`SELECT * FROM shifts WHERE shift_date = ? AND area = ?`, [shift_date, area], (err3, areaCheck) => {
+                if (areaCheck) {
+                    return res.status(400).json({ error: `Bu tarihte ${area} alanına zaten başka bir nöbet yazılmış!` });
                 }
 
-                db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration) VALUES (?, ?, ?, ?)`, 
-                    [doctor_id, shift_date, area, duration], function(err4) {
-                    if (err4) return res.status(500).json({ error: "Mesai kaydedilemedi." });
-                    res.json({ message: "Ek mesainiz başarıyla takvime eklendi!" });
+                // KONTROL 4: Ek mesai limiti dolmuş mu?
+                db.get(`SELECT value FROM settings WHERE key = 'max_shifts'`, [], (err4, limitRow) => {
+                    const maxLimit = parseInt(limitRow ? limitRow.value : '3');
+                    db.get(`SELECT COUNT(*) as count FROM shifts WHERE doctor_id = ?`, [doctor_id], (err5, countRow) => {
+                        if (countRow.count >= maxLimit) {
+                            return res.status(400).json({ error: `Belirlenen ek mesai limitine (${maxLimit}) ulaştınız!` });
+                        }
+
+                        // Tüm kontroller geçildiyse kaydet
+                        db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration) VALUES (?, ?, ?, ?)`, 
+                            [doctor_id, shift_date, area, duration], function(err6) {
+                            if (err6) return res.status(500).json({ error: "Mesai kaydedilemedi." });
+                            res.json({ message: "Ek mesainiz başarıyla takvime eklendi!" });
+                        });
+                    });
                 });
             });
         });
@@ -173,31 +193,18 @@ app.post('/api/shift/add', (req, res) => {
 
 // 9. Ek Mesai İptal Et
 app.delete('/api/shift/delete/:id', (req, res) => {
-    const shiftId = req.params.id;
-    db.run(`DELETE FROM shifts WHERE id = ?`, [shiftId], function(err) {
+    db.run(`DELETE FROM shifts WHERE id = ?`, [req.params.id], function(err) {
         if (err) return res.status(500).json({ error: "Silme işlemi başarısız." });
         res.json({ message: "Ek mesai kaydı silindi." });
     });
 });
 
-// 10. Canlı Limit Değiştir
+// 10. Canlı Limit Değiştir (Yönetici)
 app.post('/api/admin/set-limit', (req, res) => {
     const { newLimit } = req.body;
-    const limitNum = parseInt(newLimit);
-
     db.run(`UPDATE settings SET value = ? WHERE key = 'max_shifts'`, [newLimit], (err) => {
         if (err) return res.status(500).json({ error: "Limit güncellenemedi." });
-
-        db.all(`SELECT doctor_id FROM shifts GROUP BY doctor_id HAVING COUNT(*) > ?`, [limitNum], (err2, doctors) => {
-            if (doctors && doctors.length > 0) {
-                doctors.forEach(doc => {
-                    db.run(`DELETE FROM shifts WHERE id NOT IN (
-                        SELECT id FROM shifts WHERE doctor_id = ? ORDER BY created_at ASC LIMIT ?
-                    ) AND doctor_id = ?`, [doc.doctor_id, limitNum, doc.doctor_id]);
-                });
-            }
-            res.json({ message: `Canlı ek mesai sınırı ${newLimit} olarak güncellendi. Fazla yazılan mesailer temizlendi.` });
-        });
+        res.json({ message: `Canlı ek mesai sınırı ${newLimit} olarak güncellendi.` });
     });
 });
 
