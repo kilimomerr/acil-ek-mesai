@@ -51,13 +51,20 @@
                 <h6 class="fw-bold text-dark mb-3">🛠️ Yönetici Kontrol Paneli</h6>
                 <div class="row g-3">
                     <div class="col-md-3">
+                        <label class="form-label small">İşlem Yapılabilir Aktif Ay</label>
+                        <div class="input-group">
+                            <input type="month" id="adminActiveMonth" class="form-control">
+                            <button onclick="updateActiveMonth()" class="btn btn-warning">Kaydet</button>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label small">Canlı Ek Mesai Limiti</label>
                         <div class="input-group">
                             <input type="number" id="adminLimitInput" class="form-control" value="3">
                             <button onclick="updateLimit()" class="btn btn-warning">Güncelle</button>
                         </div>
                     </div>
-                    <div class="col-md-9">
+                    <div class="col-md-6">
                         <label class="form-label small">Hekime Asli/Rutin Nöbet Ekle</label>
                         <div class="row g-2">
                             <div class="col-md-5">
@@ -67,7 +74,7 @@
                                 <input type="date" id="mainDutyDate" class="form-control">
                             </div>
                             <div class="col-md-3">
-                                <button onclick="addMainDuty()" class="btn btn-success w-100">Rutin Nöbet Ekle</button>
+                                <button onclick="addMainDuty()" class="btn btn-success w-100">Rutin Ekle</button>
                             </div>
                         </div>
                     </div>
@@ -79,7 +86,8 @@
                 <div class="col-md-4">
                     <!-- EK MESAİ EKLEME FORMU -->
                     <div class="card p-4 mb-3">
-                        <h5 class="fw-bold mb-3">➕ Ek Mesai Al</h5>
+                        <h5 class="fw-bold mb-1">➕ Ek Mesai Al</h5>
+                        <p id="activeMonthInfo" class="text-muted small mb-3"></p>
                         <div class="mb-3">
                             <label class="form-label">Tarih</label>
                             <input type="date" id="shiftDate" class="form-control">
@@ -87,22 +95,24 @@
                         <div class="mb-3">
                             <label class="form-label">Alan</label>
                             <select id="shiftArea" class="form-select">
-                                <option value="Sarı Alan">Sarı Alan</option>
+                                <option value="Travma">Travma</option>
                                 <option value="Kırmızı Alan">Kırmızı Alan</option>
-                                <option value="Yeşil Alan">Yeşil Alan</option>
-                                <option value="Triyaj">Triyaj</option>
-                                <option value="Resüsitasyon">Resüsitasyon</option>
                             </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Süre</label>
                             <select id="shiftDuration" class="form-select">
-                                <option value="8">8 Saat</option>
+                                <option value="12">12 Saat</option>
                                 <option value="16">16 Saat</option>
-                                <option value="24">24 Saat</option>
                             </select>
                         </div>
                         <button onclick="addShift()" class="btn btn-primary w-100">Takvime Ekle</button>
+                    </div>
+
+                    <!-- MESAİ İPTAL LİSTESİ -->
+                    <div class="card p-3 mb-3">
+                        <h6 class="fw-bold mb-3">❌ Ek Mesai İptal Et</h6>
+                        <div id="myShiftsList" class="list-group list-group-flush small"></div>
                     </div>
 
                     <!-- BİLGİ KUTUSU -->
@@ -147,6 +157,7 @@
     <script>
         let currentUser = null;
         let calendar = null;
+        let activeMonthVal = "";
 
         async function init() {
             const res = await fetch('/api/doctors');
@@ -182,16 +193,30 @@
                     document.getElementById('adminPanel').style.display = 'block';
                 }
 
+                loadSettings();
                 initCalendar();
             } else {
                 alert(data.error);
             }
         }
 
+        async function loadSettings() {
+            const res = await fetch('/api/settings');
+            const settings = await res.json();
+            activeMonthVal = settings.active_month || new Date().toISOString().slice(0, 7);
+            
+            document.getElementById('activeMonthInfo').innerText = `İşlem Yapılabilir Ay: ${activeMonthVal}`;
+            if (document.getElementById('adminActiveMonth')) {
+                document.getElementById('adminActiveMonth').value = activeMonthVal;
+            }
+            if (document.getElementById('adminLimitInput')) {
+                document.getElementById('adminLimitInput').value = settings.max_shifts || 3;
+            }
+        }
+
         async function initCalendar() {
             const calendarEl = document.getElementById('calendar');
             
-            // Verileri Çek
             const [shiftsRes, dutiesRes] = await Promise.all([
                 fetch('/api/shifts'),
                 fetch('/api/main-duties')
@@ -200,7 +225,23 @@
             const shifts = await shiftsRes.json();
             const duties = await dutiesRes.json();
 
-            // Etkinlikleri Dönüştür
+            // Ek Mesailerim Listesini Doldur
+            const myShifts = shifts.filter(s => s.doctor_id === currentUser.id);
+            const listEl = document.getElementById('myShiftsList');
+            if (myShifts.length === 0) {
+                listEl.innerHTML = `<span class="text-muted">Kayıtlı ek mesainiz yok.</span>`;
+            } else {
+                listEl.innerHTML = myShifts.map(s => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center p-2">
+                        <div>
+                            <strong>${s.shift_date}</strong><br>
+                            <span class="text-muted">${s.area} - ${s.duration} Sa</span>
+                        </div>
+                        <button onclick="deleteShift(${s.id})" class="btn btn-sm btn-outline-danger">İptal</button>
+                    </div>
+                `).join('');
+            }
+
             const events = [
                 ...duties.map(d => ({
                     title: `📋 ${d.doctor_name} (Rutin)`,
@@ -208,9 +249,11 @@
                     color: '#6c757d'
                 })),
                 ...shifts.map(s => ({
+                    id: s.id,
                     title: `⚡ ${s.doctor_name} (${s.area} - ${s.duration}Sa)`,
                     start: s.shift_date,
-                    color: '#0d6efd'
+                    color: '#0d6efd',
+                    extendedProps: { doctor_id: s.doctor_id }
                 }))
             ];
 
@@ -218,13 +261,22 @@
 
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
+                initialDate: activeMonthVal ? `${activeMonthVal}-01` : new Date(),
                 locale: 'tr',
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
                     right: ''
                 },
-                events: events
+                events: events,
+                eventClick: function(info) {
+                    const docId = info.event.extendedProps.doctor_id;
+                    if (docId && (docId === currentUser.id || currentUser.role === 'admin')) {
+                        if (confirm(`"${info.event.title}" mesainizi iptal etmek istiyor musunuz?`)) {
+                            deleteShift(info.event.id);
+                        }
+                    }
+                }
             });
 
             calendar.render();
@@ -248,6 +300,18 @@
             if (res.ok) initCalendar();
         }
 
+        async function deleteShift(shiftId) {
+            const res = await fetch(`/api/shift/delete/${shiftId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ doctor_id: currentUser.id, role: currentUser.role })
+            });
+
+            const data = await res.json();
+            alert(data.message || data.error);
+            if (res.ok) initCalendar();
+        }
+
         async function addMainDuty() {
             const doctor_id = document.getElementById('mainDutyDoctor').value;
             const duty_date = document.getElementById('mainDutyDate').value;
@@ -263,6 +327,21 @@
             const data = await res.json();
             alert(data.message || data.error);
             if (res.ok) initCalendar();
+        }
+
+        async function updateActiveMonth() {
+            const activeMonth = document.getElementById('adminActiveMonth').value;
+            if (!activeMonth) return alert("Lütfen ay seçin!");
+
+            const res = await fetch('/api/admin/set-active-month', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activeMonth })
+            });
+            const data = await res.json();
+            alert(data.message);
+            loadSettings();
+            initCalendar();
         }
 
         async function updateLimit() {
