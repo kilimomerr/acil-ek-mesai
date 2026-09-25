@@ -11,6 +11,16 @@ app.use(express.static(path.join(__dirname)));
 
 const dbPath = './emergency_schedule.db';
 
+// Veritabanında sütun uyuşmazlığı yaşamamak için dosya varsa sıfırla
+if (fs.existsSync(dbPath)) {
+    try {
+        fs.unlinkSync(dbPath);
+        console.log("Eski veritabanı silindi, yenisi oluşturuluyor...");
+    } catch (err) {
+        console.error("Veritabanı silme hatası:", err.message);
+    }
+}
+
 // Veritabanı Kurulumu
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) console.error("Veritabanı hatası:", err.message);
@@ -44,7 +54,7 @@ db.serialize(() => {
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
 
-    // Rutin/Asıl Nöbetler Tablosu (Yöneticinin yüklediği ana nöbetler)
+    // Rutin/Asli Nöbetler Tablosu
     db.run(`CREATE TABLE IF NOT EXISTS main_duties (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         doctor_id INTEGER,
@@ -148,7 +158,7 @@ app.get('/api/shifts', (req, res) => {
     });
 });
 
-// 8. Ek Mesai Ekle (KONTROLLER EKLENDİ)
+// 8. Ek Mesai Ekle
 app.post('/api/shift/add', (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
 
