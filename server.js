@@ -20,7 +20,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // Tablo Yapılandırmaları ve Ekim 2026 Liste Aktarımı
 db.serialize(() => {
-    // Mevcut tabloları sıfırlayıp yeni şema ve Ekim 2026 verileriyle kuruyoruz
+    // Mevcut tabloları sıfırlayıp güncel şema ve Ekim 2026 verileriyle baştan kuruyoruz
     db.run(`DROP TABLE IF EXISTS doctors`);
     db.run(`DROP TABLE IF EXISTS shifts`);
     db.run(`DROP TABLE IF EXISTS main_duties`);
@@ -56,7 +56,7 @@ db.serialize(() => {
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
 
-    // Aktif Ayı ve Limit Ayarlarını Tanımlama
+    // Aktif Ay ve Limit Ayarları
     db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('max_shifts', '3')`);
     db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('active_month', '2026-10')`);
     db.run(`INSERT OR IGNORE INTO doctors (name, password, role) VALUES ('YÖNETİCİ', 'admin123', 'admin')`);
@@ -75,13 +75,11 @@ db.serialize(() => {
         "MUSTAFA", "BERAN"
     ];
 
-    // Unique isimleri ekleme
     const uniqueDocs = [...new Set(initialDoctors)];
     uniqueDocs.forEach(doc => {
         db.run(`INSERT OR IGNORE INTO doctors (name, password, role) VALUES (?, '1234', 'doctor')`, [doc]);
     });
 
-    // Ekim 2026 Verilerini Ekleme Yardımcı Fonksiyonları
     const getDocId = (name) => new Promise(resolve => {
         db.get(`SELECT id FROM doctors WHERE name = ?`, [name], (err, row) => resolve(row ? row.id : null));
     });
@@ -387,7 +385,7 @@ db.serialize(() => {
                 }
             }
         }
-        console.log("Ekim 2026 nöbetleri ve ek mesaileri başarıyla yüklendi.");
+        console.log("Ekim 2026 nöbetleri ve ek mesaileri veritabanına başarıyla aktarıldı.");
     }
 
     loadOctoberSchedule();
