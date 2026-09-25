@@ -2,24 +2,44 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Acil Servis Nöbet Portalı</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
     <style>
-        body { background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .navbar { background-color: #0f172a; }
-        .card { border-radius: 12px; border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        #calendar { background: white; padding: 15px; border-radius: 12px; }
-        .fc-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.85rem; }
+        .card { border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        
+        /* MOBİL VE RESPONSIVE TAKVİM İYİLEŞTİRMELERİ */
+        #calendar { background: white; padding: 10px; border-radius: 12px; min-height: 550px; }
+        .fc-event { cursor: pointer; border-radius: 6px; padding: 3px 6px; font-size: 0.78rem; border: none; font-weight: 500; }
+        .fc-toolbar { flex-wrap: wrap; gap: 8px; }
+        .fc-toolbar-title { font-size: 1.15rem !important; font-weight: 700; }
+
+        @media (max-width: 768px) {
+            .container { padding-left: 10px; padding-right: 10px; }
+            #calendar { padding: 5px; min-height: 480px; }
+            .fc-toolbar-title { font-size: 1rem !important; }
+            .fc-button { padding: 4px 8px !important; font-size: 0.8rem !important; }
+            .fc-event-title { font-size: 0.72rem !important; white-space: normal !important; }
+            .btn { padding: 10px; font-size: 0.95rem; }
+        }
+
+        /* ÖZEL RENK KODLARI */
+        .badge-duty { background-color: #6c757d; }
+        .badge-t12 { background-color: #198754; }
+        .badge-t16 { background-color: #0f5132; }
+        .badge-k12 { background-color: #fd7e14; }
+        .badge-k16 { background-color: #dc3545; }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg mb-4">
+    <nav class="navbar navbar-expand-lg mb-3 py-2">
         <div class="container">
-            <a class="navbar-brand text-white fw-bold" href="#">🏥 Acil Servis Nöbet Portalı</a>
-            <div id="userSection"></div>
+            <a class="navbar-brand text-white fw-bold fs-6 fs-md-5" href="#">🏥 Acil Nöbet Portalı</a>
+            <div id="userSection" class="d-flex align-items-center"></div>
         </div>
     </nav>
 
@@ -28,17 +48,17 @@
         <!-- GİRİŞ EKRANI -->
         <div id="loginCard" class="row justify-content-center">
             <div class="col-md-5">
-                <div class="card p-4">
-                    <h4 class="text-center mb-4 font-weight-bold">Sisteme Giriş</h4>
+                <div class="card p-4 my-3">
+                    <h4 class="text-center mb-4 fw-bold">Sisteme Giriş</h4>
                     <div class="mb-3">
-                        <label class="form-label">Hekim / Yönetici</label>
-                        <select id="loginDoctorSelect" class="form-select"></select>
+                        <label class="form-label fw-semibold">Hekim / Yönetici</label>
+                        <select id="loginDoctorSelect" class="form-select form-select-lg"></select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Şifre</label>
-                        <input type="password" id="loginPassword" class="form-control" placeholder="****">
+                        <label class="form-label fw-semibold">Şifre</label>
+                        <input type="password" id="loginPassword" class="form-control form-control-lg" placeholder="****">
                     </div>
-                    <button onclick="login()" class="btn btn-primary w-100">Giriş Yap</button>
+                    <button onclick="login()" class="btn btn-primary btn-lg w-100 fw-bold">Giriş Yap</button>
                 </div>
             </div>
         </div>
@@ -48,45 +68,48 @@
             
             <!-- YÖNETİCİ PANELİ -->
             <div id="adminPanel" class="card p-3 mb-4 bg-warning-subtle border-warning" style="display: none;">
-                <h6 class="fw-bold text-dark mb-3">🛠️ Yönetici Kontrol Paneli</h6>
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label small">İşlem Yapılabilir Aktif Ay</label>
-                        <div class="input-group">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-dark m-0">🛠️ Yönetici Kontrol Paneli</h6>
+                    <button onclick="exportToExcel()" class="btn btn-sm btn-success fw-bold">📊 Excel Raporu İndir</button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small fw-bold">Aktif Ay</label>
+                        <div class="input-group input-group-sm">
                             <input type="month" id="adminActiveMonth" class="form-control">
                             <button onclick="updateActiveMonth()" class="btn btn-warning">Kaydet</button>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label small">Canlı Ek Mesai Limiti</label>
-                        <div class="input-group">
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small fw-bold">Ek Mesai Limiti</label>
+                        <div class="input-group input-group-sm">
                             <input type="number" id="adminLimitInput" class="form-control" value="3">
                             <button onclick="updateLimit()" class="btn btn-warning">Güncelle</button>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small">Hekime Görev Atama (Nöbet / Ek Mesai)</label>
-                        <div class="row g-2">
-                            <div class="col-md-3">
-                                <select id="adminAssignDoctor" class="form-select"></select>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-bold">Hekime Görev Atama</label>
+                        <div class="row g-1">
+                            <div class="col-6 col-md-3">
+                                <select id="adminAssignDoctor" class="form-select form-select-sm"></select>
                             </div>
-                            <div class="col-md-3">
-                                <input type="date" id="adminAssignDate" class="form-control">
+                            <div class="col-6 col-md-3">
+                                <input type="date" id="adminAssignDate" class="form-control form-control-sm">
                             </div>
-                            <div class="col-md-2">
-                                <select id="adminAssignType" class="form-select" onchange="toggleAdminAreaSelect()">
+                            <div class="col-4 col-md-2">
+                                <select id="adminAssignType" class="form-select form-select-sm" onchange="toggleAdminAreaSelect()">
                                     <option value="duty">24s Nöbet</option>
                                     <option value="shift">Ek Mesai</option>
                                 </select>
                             </div>
-                            <div class="col-md-2" id="adminAreaCol" style="display: none;">
-                                <select id="adminAssignArea" class="form-select">
+                            <div class="col-4 col-md-2" id="adminAreaCol" style="display: none;">
+                                <select id="adminAssignArea" class="form-select form-select-sm">
                                     <option value="Travma">Travma</option>
                                     <option value="Kırmızı Alan">Kırmızı</option>
                                 </select>
                             </div>
-                            <div class="col-md-2">
-                                <button onclick="adminAssignDutyOrShift()" class="btn btn-success w-100">Atama Yap</button>
+                            <div class="col-4 col-md-2">
+                                <button onclick="adminAssignDutyOrShift()" class="btn btn-sm btn-success w-100 fw-bold">Ata</button>
                             </div>
                         </div>
                     </div>
@@ -94,50 +117,57 @@
             </div>
 
             <!-- DÜZEN & TAKVİM -->
-            <div class="row g-4">
-                <div class="col-md-4">
+            <div class="row g-3">
+                <div class="col-12 col-lg-4">
                     <!-- EK MESAİ EKLEME FORMU -->
-                    <div class="card p-4 mb-3">
+                    <div class="card p-3 mb-3">
                         <h5 class="fw-bold mb-1">➕ Ek Mesai Al</h5>
-                        <p id="activeMonthInfo" class="text-muted small mb-3"></p>
-                        <div class="mb-3">
-                            <label class="form-label">Tarih</label>
-                            <input type="date" id="shiftDate" class="form-control">
+                        <p id="activeMonthInfo" class="text-muted small mb-2"></p>
+                        <div class="row g-2">
+                            <div class="col-12 col-md-12">
+                                <label class="form-label small">Tarih</label>
+                                <input type="date" id="shiftDate" class="form-control">
+                            </div>
+                            <div class="col-6 col-md-12">
+                                <label class="form-label small">Alan</label>
+                                <select id="shiftArea" class="form-select">
+                                    <option value="Travma">Travma</option>
+                                    <option value="Kırmızı Alan">Kırmızı Alan</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-12">
+                                <label class="form-label small">Süre</label>
+                                <select id="shiftDuration" class="form-select">
+                                    <option value="12">12 Saat</option>
+                                    <option value="16">16 Saat</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Alan</label>
-                            <select id="shiftArea" class="form-select">
-                                <option value="Travma">Travma</option>
-                                <option value="Kırmızı Alan">Kırmızı Alan</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Süre</label>
-                            <select id="shiftDuration" class="form-select">
-                                <option value="12">12 Saat</option>
-                                <option value="16">16 Saat</option>
-                            </select>
-                        </div>
-                        <button onclick="addShift()" class="btn btn-primary w-100">Takvime Ekle</button>
+                        <button onclick="addShift()" class="btn btn-primary w-100 fw-bold mt-3">Takvime Ekle</button>
                     </div>
 
                     <!-- MESAİ İPTAL LİSTESİ -->
                     <div class="card p-3 mb-3">
-                        <h6 class="fw-bold mb-3">❌ Ek Mesai İptal Et</h6>
+                        <h6 class="fw-bold mb-2">❌ Ek Mesai İptal Et</h6>
                         <div id="myShiftsList" class="list-group list-group-flush small"></div>
                     </div>
 
-                    <!-- BİLGİ KUTUSU -->
+                    <!-- RENK KODLARI LEJANDI -->
                     <div class="card p-3 bg-light">
-                        <h6>📌 Takvim Renk Kodları</h6>
-                        <span class="badge bg-secondary mb-1">Gri: Rutin 24 Sa Nöbetim</span>
-                        <span class="badge bg-primary">Mavi: Tüm Ek Mesailer (12s/16s)</span>
+                        <h6 class="fw-bold small mb-2">📌 Takvim Renk Kodları</h6>
+                        <div class="d-flex flex-wrap gap-1">
+                            <span class="badge badge-duty">Gri: 24 Sa Nöbet</span>
+                            <span class="badge badge-t12">Yeşil: Travma (12Sa)</span>
+                            <span class="badge badge-t16">Koyu Yeşil: Travma (16Sa)</span>
+                            <span class="badge badge-k12">Turuncu: Kırmızı (12Sa)</span>
+                            <span class="badge badge-k16">Kırmızı: Kırmızı (16Sa)</span>
+                        </div>
                     </div>
                 </div>
 
                 <!-- TAKVİM GÖRÜNÜMÜ -->
-                <div class="col-md-8">
-                    <div class="card p-3">
+                <div class="col-12 col-lg-8">
+                    <div class="card p-2 p-md-3">
                         <div id="calendar"></div>
                     </div>
                 </div>
@@ -179,7 +209,6 @@
             document.getElementById('loginDoctorSelect').innerHTML = doctors.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
             document.getElementById('adminAssignDoctor').innerHTML = doctors.filter(d => d.role !== 'admin').map(d => `<option value="${d.id}">${d.name}</option>`).join('');
 
-            // Oturum Kontrolü (Sayfa Yenilendiğinde Giriş Ekranına Düşmesin)
             const savedUser = localStorage.getItem('userSession');
             if (savedUser) {
                 currentUser = JSON.parse(savedUser);
@@ -212,9 +241,9 @@
             document.getElementById('mainApp').style.display = 'block';
             
             document.getElementById('userSection').innerHTML = `
-                <span class="text-white me-3">👤 ${currentUser.name}</span>
-                ${currentUser.role !== 'admin' ? '<button class="btn btn-sm btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#passwordModal">🔑 Şifre Değiştir</button>' : ''}
-                <button onclick="logout()" class="btn btn-sm btn-danger">Çıkış</button>
+                <span class="text-white small me-2">👤 ${currentUser.name}</span>
+                ${currentUser.role !== 'admin' ? '<button class="btn btn-xs btn-outline-light me-1 p-1 small" data-bs-toggle="modal" data-bs-target="#passwordModal">🔑</button>' : ''}
+                <button onclick="logout()" class="btn btn-xs btn-danger p-1 px-2 small">Çıkış</button>
             `;
 
             if (currentUser.role === 'admin') {
@@ -224,7 +253,6 @@
             loadSettings();
             initCalendar();
 
-            // Canlı Takvim Güncellemesi (Her 3 saniyede bir günceller)
             if (!pollingInterval) {
                 pollingInterval = setInterval(refreshCalendarData, 3000);
             }
@@ -241,7 +269,7 @@
             const settings = await res.json();
             activeMonthVal = settings.active_month || new Date().toISOString().slice(0, 7);
             
-            document.getElementById('activeMonthInfo').innerText = `İşlem Yapılabilir Ay: ${activeMonthVal}`;
+            document.getElementById('activeMonthInfo').innerText = `Aktif İşlem Ayı: ${activeMonthVal}`;
             if (document.getElementById('adminActiveMonth')) {
                 document.getElementById('adminActiveMonth').value = activeMonthVal;
             }
@@ -252,22 +280,25 @@
 
         async function initCalendar() {
             const calendarEl = document.getElementById('calendar');
-
             if (calendar) calendar.destroy();
 
+            const isMobile = window.innerWidth < 768;
+
             calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
+                initialView: isMobile ? 'listMonth' : 'dayGridMonth',
                 initialDate: activeMonthVal ? `${activeMonthVal}-01` : new Date(),
                 locale: 'tr',
+                height: 'auto',
                 headerToolbar: {
-                    left: 'prev,next today',
+                    left: 'prev,next',
                     center: 'title',
-                    right: ''
+                    right: isMobile ? 'listMonth,dayGridMonth' : 'dayGridMonth'
                 },
                 events: [],
                 eventClick: function(info) {
                     const docId = info.event.extendedProps.doctor_id;
                     const isDuty = info.event.extendedProps.isDuty;
+                    const createdBy = info.event.extendedProps.created_by;
 
                     if (currentUser.role === 'admin') {
                         if (confirm(`"${info.event.title}" kaydını silmek istiyor musunuz?`)) {
@@ -278,8 +309,12 @@
                             }
                         }
                     } else if (docId && docId === currentUser.id && !isDuty) {
-                        if (confirm(`"${info.event.title}" mesainizi iptal etmek istiyor musunuz?`)) {
-                            deleteShift(info.event.id);
+                        if (createdBy === 'admin') {
+                            alert("Bu ek mesai yönetici tarafından atandığı için yalnız yönetici tarafından silinebilir!");
+                        } else {
+                            if (confirm(`"${info.event.title}" mesainizi iptal etmek istiyor musunuz?`)) {
+                                deleteShift(info.event.id);
+                            }
                         }
                     }
                 }
@@ -287,6 +322,15 @@
 
             calendar.render();
             await refreshCalendarData();
+        }
+
+        function getShiftColor(area, duration) {
+            if (area === 'Travma') {
+                return duration == 16 ? '#0f5132' : '#198754';
+            } else if (area === 'Kırmızı Alan') {
+                return duration == 16 ? '#dc3545' : '#fd7e14';
+            }
+            return '#0d6efd';
         }
 
         async function refreshCalendarData() {
@@ -300,27 +344,24 @@
             const shifts = await shiftsRes.json();
             const duties = await dutiesRes.json();
 
-            // Ek Mesailerim Listesi
             const myShifts = shifts.filter(s => s.doctor_id === currentUser.id);
             const listEl = document.getElementById('myShiftsList');
             if (listEl) {
                 if (myShifts.length === 0) {
-                    listEl.innerHTML = `<span class="text-muted">Kayıtlı ek mesainiz yok.</span>`;
+                    listEl.innerHTML = `<span class="text-muted small">Kayıtlı ek mesainiz bulunmamaktadır.</span>`;
                 } else {
                     listEl.innerHTML = myShifts.map(s => `
                         <div class="list-group-item d-flex justify-content-between align-items-center p-2">
                             <div>
-                                <strong>${s.shift_date}</strong><br>
+                                <strong>${s.shift_date}</strong> <span class="badge ${s.created_by==='admin'?'bg-warning text-dark':'bg-secondary'}">${s.created_by==='admin'?'Yönetici':'Kendi'}</span><br>
                                 <span class="text-muted">${s.area} - ${s.duration} Sa</span>
                             </div>
-                            <button onclick="deleteShift(${s.id})" class="btn btn-sm btn-outline-danger">İptal</button>
+                            ${s.created_by === 'admin' && currentUser.role !== 'admin' ? '<span class="badge bg-light text-muted">Kilitli</span>' : `<button onclick="deleteShift(${s.id})" class="btn btn-sm btn-outline-danger p-1 py-0">İptal</button>`}
                         </div>
                     `).join('');
                 }
             }
 
-            // GİZLİLİK VE YETKİLENDİRME FİLTRESİ
-            // 1. 24s Nöbetler: Sadece kullanıcının KENDİSİNE ait olanlar gösterilir (Admin hepsini görür).
             const filteredDuties = duties.filter(d => currentUser.role === 'admin' || d.doctor_id === currentUser.id);
 
             const events = [
@@ -329,15 +370,14 @@
                     title: `📋 ${d.doctor_name} (24 Sa Nöbet)`,
                     start: d.duty_date,
                     color: '#6c757d',
-                    extendedProps: { doctor_id: d.doctor_id, isDuty: true }
+                    extendedProps: { doctor_id: d.doctor_id, isDuty: true, created_by: d.created_by }
                 })),
-                // 2. Ek Mesailer: Tüm ek mesailer HERKESE görünür.
                 ...shifts.map(s => ({
                     id: s.id,
                     title: `⚡ ${s.doctor_name} (${s.area} - ${s.duration}Sa)`,
                     start: s.shift_date,
-                    color: '#0d6efd',
-                    extendedProps: { doctor_id: s.doctor_id, isDuty: false }
+                    color: getShiftColor(s.area, s.duration),
+                    extendedProps: { doctor_id: s.doctor_id, isDuty: false, created_by: s.created_by }
                 }))
             ];
 
@@ -376,10 +416,7 @@
         }
 
         async function deleteMainDuty(dutyId) {
-            const res = await fetch(`/api/admin/main-duty/${dutyId}`, {
-                method: 'DELETE'
-            });
-
+            const res = await fetch(`/api/admin/main-duty/${dutyId}`, { method: 'DELETE' });
             const data = await res.json();
             alert(data.message || data.error);
             if (res.ok) refreshCalendarData();
@@ -443,6 +480,10 @@
             });
             const data = await res.json();
             alert(data.message);
+        }
+
+        function exportToExcel() {
+            window.location.href = '/api/admin/export-excel';
         }
 
         async function changePassword() {
