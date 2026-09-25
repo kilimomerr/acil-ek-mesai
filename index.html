@@ -3,376 +3,353 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acil Tıp - Ek Mesai Portalı</title>
+    <title>Acil Servis Ek Mesai Portalı</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
-        h1, h2, h3 { color: #2c3e50; margin-top: 0; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        
-        #loginSection { max-width: 420px; margin: 50px auto; }
-        #mainPortal { display: none; }
-        
-        .grid-container { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
-        .admin-card { background: #eef9f5; border: 2px solid #27ae60; }
-        
-        .form-group { margin-bottom: 12px; }
-        label { display: block; margin-bottom: 4px; font-weight: bold; color: #34495e; font-size: 14px; }
-        select, input, textarea, button { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background-color: #27ae60; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 8px; }
-        button:hover { background-color: #219150; }
-        .btn-secondary { background-color: #7f8c8d; }
-        .btn-secondary:hover { background-color: #95a5a6; }
-        .btn-cancel { background-color: #e74c3c; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; width: auto; }
-        
-        .error { color: #c0392b; background-color: #f9ebea; padding: 10px; border-radius: 4px; border: 1px solid #f5b7b1; margin-bottom: 15px; display: none; }
-        .success { color: #27ae60; background-color: #eafaf1; padding: 10px; border-radius: 4px; border: 1px solid #a9dfbf; margin-bottom: 15px; display: none; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; }
-        th { background-color: #2c3e50; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        
-        /* TAKVİM GÖRÜNÜMÜ STİLLERİ */
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 15px; }
-        .calendar-day { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; min-height: 90px; }
-        .calendar-day-header { font-weight: bold; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 6px; font-size: 12px; }
-        .shift-badge { background: #e8f8f5; border-left: 3px solid #27ae60; padding: 4px; margin-bottom: 4px; border-radius: 3px; font-size: 11px; }
-        .shift-badge-travma { background: #fef9e7; border-left: 3px solid #f39c12; }
-        
-        .user-header { display: flex; justify-content: space-between; align-items: center; }
-        .tab-btn { width: auto; display: inline-block; padding: 6px 12px; margin-right: 5px; background: #34495e; }
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .navbar { background-color: #1e293b; }
+        .navbar-brand, .nav-link { color: #fff !important; }
+        .badge-rutin { background-color: #6c757d; color: white; }
+        .badge-ek { background-color: #0d6efd; color: white; }
     </style>
 </head>
 <body>
 
-    <!-- 1. GİRİŞ EKRANI -->
-    <div id="loginSection" class="card">
-        <h2 style="text-align: center;">🏥 Hekim Giriş Portalı</h2>
-        <div id="loginError" class="error"></div>
+    <nav class="navbar navbar-expand-lg mb-4">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="#">🏥 Acil Servis Nöbet Portalı</a>
+            <div class="d-flex align-items-center" id="userSection">
+                <!-- Kullanıcı bilgisi buraya gelecek -->
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mb-5">
         
-        <div class="form-group">
-            <label>Hekim / Kullanıcı Seçiniz:</label>
-            <select id="loginDoctorSelect"></select>
+        <!-- GİRİŞ EKRANI -->
+        <div id="loginCard" class="row justify-content-center">
+            <div class="col-md-5">
+                <div class="card p-4">
+                    <h4 class="card-title text-center mb-4 font-weight-bold">Sisteme Giriş Yap</h4>
+                    <div class="mb-3">
+                        <label class="form-label">Hekim / Kullanıcı Seçin</label>
+                        <select id="loginDoctorSelect" class="form-select"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Şifre</label>
+                        <input type="password" id="loginPassword" class="form-control" placeholder="****">
+                    </div>
+                    <button onclick="login()" class="btn btn-primary w-100">Giriş Yap</button>
+                </div>
+            </div>
         </div>
-        <div class="form-group">
-            <label>Şifre:</label>
-            <input type="password" id="loginPassword" placeholder="Şifreniz (Varsayılan: 1234)">
+
+        <!-- ANA PANEL (Giriş Yapılınca Açılacak) -->
+        <div id="mainApp" style="display: none;">
+            
+            <!-- YÖNETİCİ ÖZEL PANELİ -->
+            <div id="adminPanel" class="card p-4 mb-4 bg-light border-warning" style="display: none;">
+                <h5 class="text-warning-emphasis fw-bold mb-3">🛠️ Yönetici Paneli</h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-white rounded border">
+                            <h6>⚙️ Canlı Ek Mesai Limiti</h6>
+                            <div class="input-group mt-2">
+                                <input type="number" id="adminLimitInput" class="form-control" value="3" min="1" max="10">
+                                <button onclick="updateLimit()" class="btn btn-warning">Güncelle</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="p-3 bg-white rounded border">
+                            <h6>📅 Hekime Rutin/Asli Nöbet Tanımla</h6>
+                            <div class="row g-2 mt-1">
+                                <div class="col-md-5">
+                                    <select id="mainDutyDoctor" class="form-select"></select>
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="date" id="mainDutyDate" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <button onclick="addMainDuty()" class="btn btn-success w-100">Ekle</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EK MESAİ EKLEME FORMU -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card p-4">
+                        <h5 class="fw-bold mb-3">➕ Ek Mesai Yaz</h5>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Tarih</label>
+                                <input type="date" id="shiftDate" class="form-control">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Çalışılacak Alan</label>
+                                <select id="shiftArea" class="form-select">
+                                    <option value="Sarı Alan">Sarı Alan</option>
+                                    <option value="Kırmızı Alan">Kırmızı Alan</option>
+                                    <option value="Yeşil Alan">Yeşil Alan</option>
+                                    <option value="Triyaj / Danışma">Triyaj / Danışma</option>
+                                    <option value="Resüsitasyon">Resüsitasyon</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Süre (Saat)</label>
+                                <select id="shiftDuration" class="form-select">
+                                    <option value="8">8 Saat</option>
+                                    <option value="16">16 Saat</option>
+                                    <option value="24">24 Saat</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button onclick="addShift()" class="btn btn-primary w-100">Mesai Ekle</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MESAİ LİSTELERİ -->
+            <div class="row">
+                <!-- Ek Mesailer -->
+                <div class="col-md-7">
+                    <div class="card p-4">
+                        <h5 class="fw-bold mb-3">📌 Ek Mesai Listesi</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Tarih</th>
+                                        <th>Hekim</th>
+                                        <th>Alan</th>
+                                        <th>Süre</th>
+                                        <th>İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="shiftTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rutin Nöbetler Listesi -->
+                <div class="col-md-5">
+                    <div class="card p-4">
+                        <h5 class="fw-bold mb-3 text-secondary">📋 Rutin (Asli) Nöbetler</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Tarih</th>
+                                        <th>Hekim</th>
+                                        <th>İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="mainDutyTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
-        <button onclick="handleLogin()">Giriş Yap</button>
     </div>
 
-    <!-- 2. ANA PORTAL -->
-    <div id="mainPortal">
-        <!-- Kullanıcı Bilgi Çubuğu -->
-        <div class="card user-header">
-            <div>
-                <span style="font-size: 18px; font-weight: bold;" id="activeUserName">Dr. -</span>
-                <span style="color: #7f8c8d; font-size: 14px; margin-left: 10px;" id="activeUserRole">(Oturum Açıldı)</span>
-            </div>
-            <div>
-                <button onclick="openPasswordModal()" class="btn-secondary" style="width: auto; padding: 6px 12px; margin-right: 5px;">🔑 Şifre Değiştir</button>
-                <button onclick="handleLogout()" class="btn-secondary" style="width: auto; padding: 6px 12px;">Çıkış Yap</button>
-            </div>
-        </div>
-
-        <!-- YÖNETİCİ ÖZEL PANELİ -->
-        <div id="adminSection" style="display: none;">
-            <div class="card admin-card">
-                <h3>👑 Yönetici Yönetim Paneli</h3>
-                <div style="margin-bottom: 15px;">
-                    <button class="tab-btn" onclick="showAdminTab('limits')">⚙️ Limit Düzenle</button>
-                    <button class="tab-btn" onclick="showAdminTab('users')">👥 Kullanıcılar & Şifreler</button>
-                    <button class="tab-btn" onclick="showAdminTab('upload')">🗓️ Yeni Ay / Hekim Listesi Yükle</button>
+    <!-- ŞİFRE DEĞİŞTİRME MODAL -->
+    <div class="modal fade" id="passwordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Şifre Değiştir</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-
-                <!-- Tab 1: Limit -->
-                <div id="tab-limits">
-                    <label>Canlı Ek Mesai Sınırı:</label>
-                    <select id="adminLimitSelect" style="width: 150px; display: inline-block;">
-                        <option value="1">1 Ek Mesai</option>
-                        <option value="2">2 Ek Mesai</option>
-                        <option value="3" selected>3 Ek Mesai</option>
-                        <option value="4">4 Ek Mesai</option>
-                        <option value="5">5 Ek Mesai</option>
-                    </select>
-                    <button onclick="setAdminLimit()" style="width: auto; display: inline-block;">Limiti Uygula</button>
-                </div>
-
-                <!-- Tab 2: Kullanıcı Şifreleri ve Tekli Ekleme -->
-                <div id="tab-users" style="display: none;">
-                    <h4>Tekli Asistan / Hekim Ekle</h4>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" id="newDocName" placeholder="Hekim Ad Soyad">
-                        <input type="text" id="newDocPass" placeholder="Giriş Şifresi (Örn: 1234)">
-                        <button onclick="addDoctor()" style="width: 200px; margin: 0;">Ekle</button>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Mevcut Şifre</label>
+                        <input type="password" id="oldPasswordInput" class="form-control">
                     </div>
-                    <h4>Kayıtlı Tüm Hekimler ve Şifreleri</h4>
-                    <table id="userTable">
-                        <thead><tr><th>ID</th><th>Hekim Adı</th><th>Güncel Şifre</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-
-                <!-- Tab 3: Toplu Ay Yükleme -->
-                <div id="tab-upload" style="display: none;">
-                    <h4>Aylık Yeni Hekim Listesi Yapıştır / Yükle</h4>
-                    <p style="font-size: 12px; color: #555;">Her satıra bir hekim adı gelecek şekilde kopyalayıp yapıştırın:</p>
-                    <div class="form-group">
-                        <label>Yeni Hekimler İçin Varsayılan Şifre:</label>
-                        <input type="text" id="bulkDefaultPass" value="1234" placeholder="1234">
+                    <div class="mb-3">
+                        <label class="form-label">Yeni Şifre</label>
+                        <input type="password" id="newPasswordInput" class="form-control">
                     </div>
-                    <div class="form-group">
-                        <label>Hekim İsim Listesi:</label>
-                        <textarea id="bulkDoctorsText" rows="5" placeholder="AHMET YILMAZ&#10;MEHMET KAYA&#10;AYŞE DEMİR"></textarea>
-                    </div>
-                    <button onclick="uploadBulkDoctors()">Listeyi Yükle ve Oluştur</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- ANA İÇERİK: FORM VE CANLI TAKVİM -->
-        <div class="grid-container">
-            <!-- FORMLAR -->
-            <div class="card">
-                <h3>Ek Mesai Yaz</h3>
-                <div id="errorBox" class="error"></div>
-                <div id="successBox" class="success"></div>
-
-                <div class="form-group">
-                    <label>Tarih Seçiniz:</label>
-                    <input type="date" id="shiftDate" min="2026-10-01" max="2026-10-31">
+                <div class="modal-footer">
+                    <button onclick="changePassword()" class="btn btn-success">Kaydet</button>
                 </div>
-                <div class="form-group">
-                    <label>Alan (Maksimum 1 Kişi):</label>
-                    <select id="areaSelect">
-                        <option value="KIRMIZI ALAN">Kırmızı Alan</option>
-                        <option value="TRAVMA">Travma</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Süre:</label>
-                    <select id="durationSelect">
-                        <option value="12">12 Saat</option>
-                        <option value="16">16 Saat</option>
-                    </select>
-                </div>
-                <button onclick="saveShift()">Ek Mesaiyi Kaydet (İlk Gelen Alır)</button>
-            </div>
-
-            <!-- CANLI NÖBET TAKVİMİ -->
-            <div class="card">
-                <h3>📅 Canlı Nöbet Takvimi (Ekim 2026)</h3>
-                <div id="calendar" class="calendar-grid"></div>
             </div>
         </div>
     </div>
 
-<script>
-    let currentUser = null;
-    let allShifts = [];
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentUser = null;
 
-    // Sayfa Yüklendiğinde Hekimleri Getir
-    window.onload = loadDoctorList;
-
-    async function loadDoctorList() {
-        const res = await fetch('/api/doctors');
-        const doctors = await res.json();
-        const select = document.getElementById('loginDoctorSelect');
-        select.innerHTML = '';
-        doctors.forEach(doc => {
-            let opt = document.createElement('option');
-            opt.value = doc.id;
-            opt.innerText = (doc.role === 'admin' ? '👑 ' : 'Dr. ') + doc.name;
-            select.appendChild(opt);
-        });
-    }
-
-    async function handleLogin() {
-        const doctor_id = document.getElementById('loginDoctorSelect').value;
-        const password = document.getElementById('loginPassword').value;
-
-        const res = await fetch('/api/login', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ doctor_id, password })
-        });
-        const data = await res.json();
-
-        if (data.error) {
-            document.getElementById('loginError').innerText = data.error;
-            document.getElementById('loginError').style.display = 'block';
-        } else {
-            currentUser = data.user;
-            document.getElementById('activeUserName').innerText = currentUser.name;
-            document.getElementById('activeUserRole').innerText = currentUser.role === 'admin' ? '(👑 Yönetici)' : '(Hekim)';
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('mainPortal').style.display = 'block';
-
-            if (currentUser.role === 'admin') {
-                document.getElementById('adminSection').style.display = 'block';
-                loadAdminUsers();
-            }
-
-            loadShifts();
+        async function init() {
+            const res = await fetch('/api/doctors');
+            const doctors = await res.json();
+            
+            const loginSelect = document.getElementById('loginDoctorSelect');
+            const mainDutySelect = document.getElementById('mainDutyDoctor');
+            
+            loginSelect.innerHTML = doctors.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+            mainDutySelect.innerHTML = doctors.filter(d => d.role !== 'admin').map(d => `<option value="${d.id}">${d.name}</option>`).join('');
         }
-    }
 
-    function handleLogout() {
-        currentUser = null;
-        document.getElementById('loginPassword').value = '';
-        document.getElementById('loginSection').style.display = 'block';
-        document.getElementById('mainPortal').style.display = 'none';
-        document.getElementById('adminSection').style.display = 'none';
-    }
+        async function login() {
+            const doctor_id = document.getElementById('loginDoctorSelect').value;
+            const password = document.getElementById('loginPassword').value;
 
-    async function openPasswordModal() {
-        const oldPassword = prompt("Mevcut şifrenizi giriniz:");
-        if (!oldPassword) return;
-        const newPassword = prompt("Yeni şifrenizi giriniz:");
-        if (!newPassword) return;
-
-        const res = await fetch('/api/change-password', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ doctor_id: currentUser.id, oldPassword, newPassword })
-        });
-        const data = await res.json();
-        alert(data.message || data.error);
-    }
-
-    async function loadShifts() {
-        const res = await fetch('/api/shifts');
-        allShifts = await res.json();
-        renderCalendar();
-    }
-
-    function renderCalendar() {
-        const calendar = document.getElementById('calendar');
-        calendar.innerHTML = '';
-
-        // Ekim 2026 için 31 Gün Oluştur
-        for (let day = 1; day <= 31; day++) {
-            const dayStr = day < 10 ? `0${day}` : `${day}`;
-            const dateStr = `2026-10-${dayStr}`;
-
-            const dayCard = document.createElement('div');
-            dayCard.className = 'calendar-day';
-            dayCard.innerHTML = `<div class="calendar-day-header">${day} Ekim</div>`;
-
-            // O güne yazılan nöbetler
-            const dayShifts = allShifts.filter(s => s.shift_date === dateStr);
-            dayShifts.forEach(shift => {
-                const isTravma = shift.area === 'TRAVMA';
-                const badge = document.createElement('div');
-                badge.className = `shift-badge ${isTravma ? 'shift-badge-travma' : ''}`;
-                
-                let canDelete = currentUser && (currentUser.id === shift.doctor_id || currentUser.role === 'admin');
-                badge.innerHTML = `
-                    <strong>${shift.doctor_name}</strong><br>
-                    <small>${shift.area} (${shift.duration}Sa)</small>
-                    ${canDelete ? `<br><button class="btn-cancel" onclick="deleteShift(${shift.id})" style="margin-top:2px;">İptal</button>` : ''}
-                `;
-                dayCard.appendChild(badge);
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ doctor_id, password })
             });
 
-            calendar.appendChild(dayCard);
+            const data = await res.json();
+            if (res.ok) {
+                currentUser = data.user;
+                document.getElementById('loginCard').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+                
+                document.getElementById('userSection').innerHTML = `
+                    <span class="text-white me-3">👤 ${currentUser.name}</span>
+                    ${currentUser.role !== 'admin' ? '<button class="btn btn-sm btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#passwordModal">🔑 Şifre Değiştir</button>' : ''}
+                    <button onclick="location.reload()" class="btn btn-sm btn-danger">Çıkış</button>
+                `;
+
+                if (currentUser.role === 'admin') {
+                    document.getElementById('adminPanel').style.display = 'block';
+                }
+
+                loadShifts();
+                loadMainDuties();
+            } else {
+                alert(data.error);
+            }
         }
-    }
 
-    async function saveShift() {
-        const shift_date = document.getElementById('shiftDate').value;
-        const area = document.getElementById('areaSelect').value;
-        const duration = document.getElementById('durationSelect').value;
-
-        if (!shift_date) return alert("Lütfen bir tarih seçiniz.");
-
-        const res = await fetch('/api/shift/add', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ doctor_id: currentUser.id, shift_date, area, duration })
-        });
-        const data = await res.json();
-
-        if (data.error) {
-            document.getElementById('errorBox').innerText = data.error;
-            document.getElementById('errorBox').style.display = 'block';
-            document.getElementById('successBox').style.display = 'none';
-        } else {
-            document.getElementById('successBox').innerText = data.message;
-            document.getElementById('successBox').style.display = 'block';
-            document.getElementById('errorBox').style.display = 'none';
-            loadShifts();
+        async function loadShifts() {
+            const res = await fetch('/api/shifts');
+            const shifts = await res.json();
+            const tbody = document.getElementById('shiftTableBody');
+            
+            tbody.innerHTML = shifts.map(s => `
+                <tr>
+                    <td><strong>${s.shift_date}</strong></td>
+                    <td>${s.doctor_name}</td>
+                    <td><span class="badge badge-ek">${s.area}</span></td>
+                    <td>${s.duration} Sa.</td>
+                    <td>
+                        ${(currentUser.role === 'admin' || currentUser.id === s.doctor_id) 
+                            ? `<button onclick="deleteShift(${s.id})" class="btn btn-sm btn-outline-danger">Sil</button>` 
+                            : ''}
+                    </td>
+                </tr>
+            `).join('');
         }
-    }
 
-    async function deleteShift(id) {
-        if (!confirm("Bu ek mesai kaydını silmek istediğinize emin misiniz?")) return;
-        const res = await fetch(`/api/shift/delete/${id}`, { method: 'DELETE' });
-        const data = await res.json();
-        alert(data.message || data.error);
-        loadShifts();
-    }
+        async function addShift() {
+            const shift_date = document.getElementById('shiftDate').value;
+            const area = document.getElementById('shiftArea').value;
+            const duration = document.getElementById('shiftDuration').value;
 
-    // YÖNETİCİ FONKSİYONLARI
-    function showAdminTab(tabName) {
-        document.getElementById('tab-limits').style.display = tabName === 'limits' ? 'block' : 'none';
-        document.getElementById('tab-users').style.display = tabName === 'users' ? 'block' : 'none';
-        document.getElementById('tab-upload').style.display = tabName === 'upload' ? 'block' : 'none';
-    }
+            if (!shift_date) return alert("Lütfen bir tarih seçiniz.");
 
-    async function setAdminLimit() {
-        const newLimit = document.getElementById('adminLimitSelect').value;
-        const res = await fetch('/api/admin/set-limit', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ newLimit })
-        });
-        const data = await res.json();
-        alert(data.message);
-        loadShifts();
-    }
+            const res = await fetch('/api/shift/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ doctor_id: currentUser.id, shift_date, area, duration })
+            });
 
-    async function loadAdminUsers() {
-        const res = await fetch('/api/admin/users');
-        const users = await res.json();
-        const tbody = document.querySelector('#userTable tbody');
-        tbody.innerHTML = '';
-        users.forEach(u => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${u.id}</td><td>Dr. ${u.name}</td><td><strong>${u.password}</strong></td>`;
-            tbody.appendChild(tr);
-        });
-    }
+            const data = await res.json();
+            alert(data.message || data.error);
+            if (res.ok) loadShifts();
+        }
 
-    async function addDoctor() {
-        const name = document.getElementById('newDocName').value;
-        const password = document.getElementById('newDocPass').value;
-        const res = await fetch('/api/admin/add-doctor', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ name, password })
-        });
-        const data = await res.json();
-        alert(data.message || data.error);
-        loadAdminUsers();
-        loadDoctorList();
-    }
+        async function deleteShift(id) {
+            if (!confirm("Bu ek mesaiyi silmek istediğinize emin misiniz?")) return;
+            const res = await fetch(`/api/shift/delete/${id}`, { method: 'DELETE' });
+            if (res.ok) loadShifts();
+        }
 
-    async function uploadBulkDoctors() {
-        const text = document.getElementById('bulkDoctorsText').value;
-        const defaultPassword = document.getElementById('bulkDefaultPass').value;
-        const doctorNames = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-        
-        const res = await fetch('/api/admin/bulk-upload-doctors', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ doctorNames, defaultPassword })
-        });
-        const data = await res.json();
-        alert(data.message || data.error);
-        loadAdminUsers();
-        loadDoctorList();
-    }
-</script>
+        // --- RUTİN NÖBET İŞLEMLERİ ---
+        async function loadMainDuties() {
+            const res = await fetch('/api/main-duties');
+            const duties = await res.json();
+            const tbody = document.getElementById('mainDutyTableBody');
+
+            tbody.innerHTML = duties.map(d => `
+                <tr>
+                    <td>${d.duty_date}</td>
+                    <td>${d.doctor_name}</td>
+                    <td>
+                        ${currentUser.role === 'admin' 
+                            ? `<button onclick="deleteMainDuty(${d.id})" class="btn btn-sm btn-link text-danger p-0">Sil</button>` 
+                            : '-'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function addMainDuty() {
+            const doctor_id = document.getElementById('mainDutyDoctor').value;
+            const duty_date = document.getElementById('mainDutyDate').value;
+
+            if (!duty_date) return alert("Tarih seçiniz.");
+
+            const res = await fetch('/api/admin/add-main-duty', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ doctor_id, duty_date })
+            });
+
+            const data = await res.json();
+            alert(data.message || data.error);
+            if (res.ok) loadMainDuties();
+        }
+
+        async function deleteMainDuty(id) {
+            if (!confirm("Rutin nöbet kaydını silmek istediğinize emin misiniz?")) return;
+            const res = await fetch(`/api/admin/main-duty/${id}`, { method: 'DELETE' });
+            if (res.ok) loadMainDuties();
+        }
+
+        async function updateLimit() {
+            const newLimit = document.getElementById('adminLimitInput').value;
+            const res = await fetch('/api/admin/set-limit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newLimit })
+            });
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function changePassword() {
+            const oldPassword = document.getElementById('oldPasswordInput').value;
+            const newPassword = document.getElementById('newPasswordInput').value;
+
+            const res = await fetch('/api/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ doctor_id: currentUser.id, oldPassword, newPassword })
+            });
+
+            const data = await res.json();
+            alert(data.message || data.error);
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('passwordModal')).hide();
+            }
+        }
+
+        init();
+    </script>
 </body>
 </html>
