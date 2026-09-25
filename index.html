@@ -65,16 +65,28 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">Hekime 24 Saatlik Rutin Nöbet Ekle</label>
+                        <label class="form-label small">Hekime Görev Atama (Nöbet / Ek Mesai)</label>
                         <div class="row g-2">
-                            <div class="col-md-5">
-                                <select id="mainDutyDoctor" class="form-select"></select>
-                            </div>
-                            <div class="col-md-4">
-                                <input type="date" id="mainDutyDate" class="form-control">
+                            <div class="col-md-3">
+                                <select id="adminAssignDoctor" class="form-select"></select>
                             </div>
                             <div class="col-md-3">
-                                <button onclick="addMainDuty()" class="btn btn-success w-100">Nöbet Ekle</button>
+                                <input type="date" id="adminAssignDate" class="form-control">
+                            </div>
+                            <div class="col-md-2">
+                                <select id="adminAssignType" class="form-select" onchange="toggleAdminAreaSelect()">
+                                    <option value="duty">24s Nöbet</option>
+                                    <option value="shift">Ek Mesai</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2" id="adminAreaCol" style="display: none;">
+                                <select id="adminAssignArea" class="form-select">
+                                    <option value="Travma">Travma</option>
+                                    <option value="Kırmızı Alan">Kırmızı</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button onclick="adminAssignDutyOrShift()" class="btn btn-success w-100">Atama Yap</button>
                             </div>
                         </div>
                     </div>
@@ -118,8 +130,8 @@
                     <!-- BİLGİ KUTUSU -->
                     <div class="card p-3 bg-light">
                         <h6>📌 Takvim Renk Kodları</h6>
-                        <span class="badge bg-secondary mb-1">Gri: Rutin 24 Sa Nöbet</span>
-                        <span class="badge bg-primary">Mavi: Ek Mesai (12s/16s)</span>
+                        <span class="badge bg-secondary mb-1">Gri: Rutin 24 Sa Nöbetim</span>
+                        <span class="badge bg-primary">Mavi: Tüm Ek Mesailer (12s/16s)</span>
                     </div>
                 </div>
 
@@ -158,13 +170,21 @@
         let currentUser = null;
         let calendar = null;
         let activeMonthVal = "";
+        let pollingInterval = null;
 
         async function init() {
             const res = await fetch('/api/doctors');
             const doctors = await res.json();
             
             document.getElementById('loginDoctorSelect').innerHTML = doctors.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-            document.getElementById('mainDutyDoctor').innerHTML = doctors.filter(d => d.role !== 'admin').map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+            document.getElementById('adminAssignDoctor').innerHTML = doctors.filter(d => d.role !== 'admin').map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+
+            // Oturum Kontrolü (Sayfa Yenilendiğinde Giriş Ekranına Düşmesin)
+            const savedUser = localStorage.getItem('userSession');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                setupAppUI();
+            }
         }
 
         async function login() {
@@ -180,24 +200,40 @@
             const data = await res.json();
             if (res.ok) {
                 currentUser = data.user;
-                document.getElementById('loginCard').style.display = 'none';
-                document.getElementById('mainApp').style.display = 'block';
-                
-                document.getElementById('userSection').innerHTML = `
-                    <span class="text-white me-3">👤 ${currentUser.name}</span>
-                    ${currentUser.role !== 'admin' ? '<button class="btn btn-sm btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#passwordModal">🔑 Şifre Değiştir</button>' : ''}
-                    <button onclick="location.reload()" class="btn btn-sm btn-danger">Çıkış</button>
-                `;
-
-                if (currentUser.role === 'admin') {
-                    document.getElementById('adminPanel').style.display = 'block';
-                }
-
-                loadSettings();
-                initCalendar();
+                localStorage.setItem('userSession', JSON.stringify(currentUser));
+                setupAppUI();
             } else {
                 alert(data.error);
             }
+        }
+
+        function setupAppUI() {
+            document.getElementById('loginCard').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            
+            document.getElementById('userSection').innerHTML = `
+                <span class="text-white me-3">👤 ${currentUser.name}</span>
+                ${currentUser.role !== 'admin' ? '<button class="btn btn-sm btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#passwordModal">🔑 Şifre Değiştir</button>' : ''}
+                <button onclick="logout()" class="btn btn-sm btn-danger">Çıkış</button>
+            `;
+
+            if (currentUser.role === 'admin') {
+                document.getElementById('adminPanel').style.display = 'block';
+            }
+
+            loadSettings();
+            initCalendar();
+
+            // Canlı Takvim Güncellemesi (Her 3 saniyede bir günceller)
+            if (!pollingInterval) {
+                pollingInterval = setInterval(refreshCalendarData, 3000);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('userSession');
+            if (pollingInterval) clearInterval(pollingInterval);
+            location.reload();
         }
 
         async function loadSettings() {
@@ -216,46 +252,6 @@
 
         async function initCalendar() {
             const calendarEl = document.getElementById('calendar');
-            
-            const [shiftsRes, dutiesRes] = await Promise.all([
-                fetch('/api/shifts'),
-                fetch('/api/main-duties')
-            ]);
-
-            const shifts = await shiftsRes.json();
-            const duties = await dutiesRes.json();
-
-            // Ek Mesailerim Listesi
-            const myShifts = shifts.filter(s => s.doctor_id === currentUser.id);
-            const listEl = document.getElementById('myShiftsList');
-            if (myShifts.length === 0) {
-                listEl.innerHTML = `<span class="text-muted">Kayıtlı ek mesainiz yok.</span>`;
-            } else {
-                listEl.innerHTML = myShifts.map(s => `
-                    <div class="list-group-item d-flex justify-content-between align-items-center p-2">
-                        <div>
-                            <strong>${s.shift_date}</strong><br>
-                            <span class="text-muted">${s.area} - ${s.duration} Sa</span>
-                        </div>
-                        <button onclick="deleteShift(${s.id})" class="btn btn-sm btn-outline-danger">İptal</button>
-                    </div>
-                `).join('');
-            }
-
-            const events = [
-                ...duties.map(d => ({
-                    title: `📋 ${d.doctor_name} (24 Sa Nöbet)`,
-                    start: d.duty_date,
-                    color: '#6c757d'
-                })),
-                ...shifts.map(s => ({
-                    id: s.id,
-                    title: `⚡ ${s.doctor_name} (${s.area} - ${s.duration}Sa)`,
-                    start: s.shift_date,
-                    color: '#0d6efd',
-                    extendedProps: { doctor_id: s.doctor_id }
-                }))
-            ];
 
             if (calendar) calendar.destroy();
 
@@ -268,10 +264,20 @@
                     center: 'title',
                     right: ''
                 },
-                events: events,
+                events: [],
                 eventClick: function(info) {
                     const docId = info.event.extendedProps.doctor_id;
-                    if (docId && (docId === currentUser.id || currentUser.role === 'admin')) {
+                    const isDuty = info.event.extendedProps.isDuty;
+
+                    if (currentUser.role === 'admin') {
+                        if (confirm(`"${info.event.title}" kaydını silmek istiyor musunuz?`)) {
+                            if (isDuty) {
+                                deleteMainDuty(info.event.id);
+                            } else {
+                                deleteShift(info.event.id);
+                            }
+                        }
+                    } else if (docId && docId === currentUser.id && !isDuty) {
                         if (confirm(`"${info.event.title}" mesainizi iptal etmek istiyor musunuz?`)) {
                             deleteShift(info.event.id);
                         }
@@ -280,6 +286,63 @@
             });
 
             calendar.render();
+            await refreshCalendarData();
+        }
+
+        async function refreshCalendarData() {
+            if (!calendar) return;
+
+            const [shiftsRes, dutiesRes] = await Promise.all([
+                fetch('/api/shifts'),
+                fetch('/api/main-duties')
+            ]);
+
+            const shifts = await shiftsRes.json();
+            const duties = await dutiesRes.json();
+
+            // Ek Mesailerim Listesi
+            const myShifts = shifts.filter(s => s.doctor_id === currentUser.id);
+            const listEl = document.getElementById('myShiftsList');
+            if (listEl) {
+                if (myShifts.length === 0) {
+                    listEl.innerHTML = `<span class="text-muted">Kayıtlı ek mesainiz yok.</span>`;
+                } else {
+                    listEl.innerHTML = myShifts.map(s => `
+                        <div class="list-group-item d-flex justify-content-between align-items-center p-2">
+                            <div>
+                                <strong>${s.shift_date}</strong><br>
+                                <span class="text-muted">${s.area} - ${s.duration} Sa</span>
+                            </div>
+                            <button onclick="deleteShift(${s.id})" class="btn btn-sm btn-outline-danger">İptal</button>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            // GİZLİLİK VE YETKİLENDİRME FİLTRESİ
+            // 1. 24s Nöbetler: Sadece kullanıcının KENDİSİNE ait olanlar gösterilir (Admin hepsini görür).
+            const filteredDuties = duties.filter(d => currentUser.role === 'admin' || d.doctor_id === currentUser.id);
+
+            const events = [
+                ...filteredDuties.map(d => ({
+                    id: d.id,
+                    title: `📋 ${d.doctor_name} (24 Sa Nöbet)`,
+                    start: d.duty_date,
+                    color: '#6c757d',
+                    extendedProps: { doctor_id: d.doctor_id, isDuty: true }
+                })),
+                // 2. Ek Mesailer: Tüm ek mesailer HERKESE görünür.
+                ...shifts.map(s => ({
+                    id: s.id,
+                    title: `⚡ ${s.doctor_name} (${s.area} - ${s.duration}Sa)`,
+                    start: s.shift_date,
+                    color: '#0d6efd',
+                    extendedProps: { doctor_id: s.doctor_id, isDuty: false }
+                }))
+            ];
+
+            calendar.removeAllEvents();
+            calendar.addEventSource(events);
         }
 
         async function addShift() {
@@ -297,7 +360,7 @@
 
             const data = await res.json();
             alert(data.message || data.error);
-            if (res.ok) initCalendar();
+            if (res.ok) refreshCalendarData();
         }
 
         async function deleteShift(shiftId) {
@@ -309,24 +372,51 @@
 
             const data = await res.json();
             alert(data.message || data.error);
-            if (res.ok) initCalendar();
+            if (res.ok) refreshCalendarData();
         }
 
-        async function addMainDuty() {
-            const doctor_id = document.getElementById('mainDutyDoctor').value;
-            const duty_date = document.getElementById('mainDutyDate').value;
-
-            if (!duty_date) return alert("Tarih seçiniz!");
-
-            const res = await fetch('/api/admin/add-main-duty', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ doctor_id, duty_date })
+        async function deleteMainDuty(dutyId) {
+            const res = await fetch(`/api/admin/main-duty/${dutyId}`, {
+                method: 'DELETE'
             });
 
             const data = await res.json();
             alert(data.message || data.error);
-            if (res.ok) initCalendar();
+            if (res.ok) refreshCalendarData();
+        }
+
+        function toggleAdminAreaSelect() {
+            const type = document.getElementById('adminAssignType').value;
+            document.getElementById('adminAreaCol').style.display = (type === 'shift') ? 'block' : 'none';
+        }
+
+        async function adminAssignDutyOrShift() {
+            const doctor_id = document.getElementById('adminAssignDoctor').value;
+            const dateVal = document.getElementById('adminAssignDate').value;
+            const type = document.getElementById('adminAssignType').value;
+
+            if (!dateVal) return alert("Tarih seçiniz!");
+
+            if (type === 'duty') {
+                const res = await fetch('/api/admin/add-main-duty', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ doctor_id, duty_date: dateVal })
+                });
+                const data = await res.json();
+                alert(data.message || data.error);
+            } else {
+                const area = document.getElementById('adminAssignArea').value;
+                const res = await fetch('/api/admin/add-shift', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ doctor_id, shift_date: dateVal, area, duration: 12 })
+                });
+                const data = await res.json();
+                alert(data.message || data.error);
+            }
+
+            refreshCalendarData();
         }
 
         async function updateActiveMonth() {
