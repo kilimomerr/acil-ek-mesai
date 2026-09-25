@@ -2,6 +2,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const ExcelJS = require('exceljs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,22 +12,13 @@ app.use(express.static(path.join(__dirname)));
 
 const dbPath = path.join(__dirname, 'emergency_schedule.db');
 
-// Eski veritabanı temizleme
-if (fs.existsSync(dbPath)) {
-    try {
-        fs.unlinkSync(dbPath);
-        console.log("Eski veritabanı dosyası temizlendi.");
-    } catch (err) {
-        console.error("Veritabanı silinemedi:", err.message);
-    }
-}
-
+// Veritabanı Bağlantısı
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) console.error("Veritabanı hatası:", err.message);
-    else console.log("Yeni SQLite veritabanı bağlandı.");
+    else console.log("SQLite veritabanı bağlandı.");
 });
 
-// Tablo Yapılandırmaları
+// Tablo Yapılandırmaları ve Sütun Kontrolleri
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS doctors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +38,7 @@ db.serialize(() => {
         shift_date TEXT NOT NULL,
         area TEXT NOT NULL,
         duration INTEGER NOT NULL,
+        created_by TEXT DEFAULT 'user',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
@@ -54,8 +47,13 @@ db.serialize(() => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         doctor_id INTEGER,
         duty_date TEXT NOT NULL,
+        created_by TEXT DEFAULT 'admin',
         FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     )`);
+
+    // Sütun güncellemeleri (Eski veritabanı uyumluluğu için)
+    db.run(`ALTER TABLE shifts ADD COLUMN created_by TEXT DEFAULT 'user'`, () => {});
+    db.run(`ALTER TABLE main_duties ADD COLUMN created_by TEXT DEFAULT 'admin'`, () => {});
 
     // Varsayılan Ayarlar
     const currentMonthStr = new Date().toISOString().slice(0, 7);
@@ -117,7 +115,6 @@ app.get('/api/settings', (req, res) => {
     });
 });
 
-// Yönetici Ayarları
 app.post('/api/admin/set-active-month', (req, res) => {
     const { activeMonth } = req.body;
     db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('active_month', ?)`, [activeMonth], () => {
@@ -131,48 +128,47 @@ app.post('/api/admin/set-limit', (req, res) => {
     });
 });
 
-// Yönetici Tarafından Rutin Nöbet Ekleme
+// Yönetici Tarafından Rutin Nöbet Ekleme (created_by = 'admin')
 app.post('/api/admin/add-main-duty', (req, res) => {
     const { doctor_id, duty_date } = req.body;
     if (!doctor_id || !duty_date) return res.status(400).json({ error: "Eksik bilgi." });
 
-    db.run(`INSERT INTO main_duties (doctor_id, duty_date) VALUES (?, ?)`, [doctor_id, duty_date], (err) => {
+    db.run(`INSERT INTO main_duties (doctor_id, duty_date, created_by) VALUES (?, ?, 'admin')`, [doctor_id, duty_date], (err) => {
         if (err) return res.status(500).json({ error: "Nöbet eklenemedi." });
         res.json({ message: "Rutin 24 saatlik nöbet eklendi." });
     });
 });
 
-// Yönetici Tarafından Ek Mesai Ekleme (Limit/Kural Muaf)
+// Yönetici Tarafından Ek Mesai Ekleme (created_by = 'admin')
 app.post('/api/admin/add-shift', (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
     if (!doctor_id || !shift_date || !area || !duration) return res.status(400).json({ error: "Eksik bilgi." });
 
-    db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration) VALUES (?, ?, ?, ?)`, 
+    db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration, created_by) VALUES (?, ?, ?, ?, 'admin')`, 
         [doctor_id, shift_date, area, duration], (err) => {
         if (err) return res.status(500).json({ error: "Ek mesai eklenemedi." });
-        res.json({ message: "Hekime ek mesai tanımlandı." });
+        res.json({ message: "Yönetici tarafından ek mesai tanımlandı." });
     });
 });
 
 app.get('/api/main-duties', (req, res) => {
-    const sql = `SELECT main_duties.id, main_duties.doctor_id, main_duties.duty_date, doctors.name as doctor_name 
+    const sql = `SELECT main_duties.id, main_duties.doctor_id, main_duties.duty_date, main_duties.created_by, doctors.name as doctor_name 
                  FROM main_duties 
                  JOIN doctors ON main_duties.doctor_id = doctors.id`;
     db.all(sql, [], (err, rows) => res.json(rows || []));
 });
 
 app.get('/api/shifts', (req, res) => {
-    const sql = `SELECT shifts.id, shifts.doctor_id, shifts.shift_date, shifts.area, shifts.duration, doctors.name as doctor_name 
+    const sql = `SELECT shifts.id, shifts.doctor_id, shifts.shift_date, shifts.area, shifts.duration, shifts.created_by, doctors.name as doctor_name 
                  FROM shifts 
                  JOIN doctors ON shifts.doctor_id = doctors.id`;
     db.all(sql, [], (err, rows) => res.json(rows || []));
 });
 
-// KONTROLLÜ EK MESAİ EKLEME (HEKİM TARAFINDAN)
+// HEKİM TARAFINDAN EK MESAİ EKLEME (created_by = 'user')
 app.post('/api/shift/add', async (req, res) => {
     const { doctor_id, shift_date, area, duration } = req.body;
 
-    // Aktif Ay Kontrolü
     const shiftMonth = shift_date.slice(0, 7);
     const activeMonthRow = await new Promise(resolve => {
         db.get(`SELECT value FROM settings WHERE key = 'active_month'`, [], (err, row) => resolve(row));
@@ -180,10 +176,9 @@ app.post('/api/shift/add', async (req, res) => {
     const activeMonth = activeMonthRow ? activeMonthRow.value : null;
 
     if (activeMonth && shiftMonth !== activeMonth) {
-        return res.status(400).json({ error: `Sadece yöneticinin belirlediği aktif ay (${activeMonth}) için işlem yapabilirsiniz!` });
+        return res.status(400).json({ error: `Sadece aktif ay (${activeMonth}) için işlem yapabilirsiniz!` });
     }
 
-    // Hekimin Rutin Nöbet ve Ek Mesai Tarihlerini Al
     const mainDutyDates = new Set();
     const shiftDates = new Set();
     const allDutyDates = new Set();
@@ -202,23 +197,19 @@ app.post('/api/shift/add', async (req, res) => {
         });
     });
 
-    // 1. KURAL: Rutin 24 Saatlik Nöbetin Olduğu Güne Ek Mesai Yazılamaz
     if (mainDutyDates.has(shift_date)) {
         return res.status(400).json({ error: "24 saatlik nöbetinizin olduğu güne ek mesai yazamazsınız!" });
     }
 
-    // Aynı güne ikinci ek mesai yazılamaz
     if (shiftDates.has(shift_date)) {
         return res.status(400).json({ error: "Bu tarihte zaten tanımlı bir ek mesainiz bulunmaktadır!" });
     }
 
-    // 2. KURAL: Rutin Nöbetin ERTESİ GÜNÜNE Ek Mesai Yazılamaz (Dinlenme Günü)
     const prevDay = addDays(shift_date, -1);
     if (mainDutyDates.has(prevDay)) {
-        return res.status(400).json({ error: "24 saatlik nöbetinizin ertesi gününe (dinlenme günü) ek mesai yazamazsınız!" });
+        return res.status(400).json({ error: "24 saatlik nöbetinizin ertesi gününe ek mesai yazamazsınız!" });
     }
 
-    // 3. KURAL: Ardışık 3 Gün Üst Üste Görev Yapılamaz
     const dMinus1 = addDays(shift_date, -1);
     const dMinus2 = addDays(shift_date, -2);
     if (allDutyDates.has(dMinus1) && allDutyDates.has(dMinus2)) {
@@ -235,7 +226,6 @@ app.post('/api/shift/add', async (req, res) => {
         return res.status(400).json({ error: "Bu tarih seçilirse ardışık 3 gün üst üste görev oluşur!" });
     }
 
-    // Alan Doluluk ve Limit Kontrolü
     db.get(`SELECT * FROM shifts WHERE shift_date = ? AND area = ?`, [shift_date, area], (err, areaCheck) => {
         if (areaCheck) return res.status(400).json({ error: `Bu tarihte ${area} alanına zaten ek mesai yazılmış!` });
 
@@ -246,7 +236,7 @@ app.post('/api/shift/add', async (req, res) => {
                     return res.status(400).json({ error: `Belirlenen ek mesai limitine (${maxLimit}) ulaştınız!` });
                 }
 
-                db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration) VALUES (?, ?, ?, ?)`, 
+                db.run(`INSERT INTO shifts (doctor_id, shift_date, area, duration, created_by) VALUES (?, ?, ?, ?, 'user')`, 
                     [doctor_id, shift_date, area, duration], (err4) => {
                     if (err4) return res.status(500).json({ error: "Mesai kaydedilemedi." });
                     res.json({ message: "Ek mesainiz takvime eklendi!" });
@@ -256,7 +246,7 @@ app.post('/api/shift/add', async (req, res) => {
     });
 });
 
-// EK MESAİ İPTAL/SİLME
+// SİLME İŞLEMİ (Yöneticinin eklediğini hekim silemez)
 app.delete('/api/shift/delete/:id', async (req, res) => {
     const shiftId = req.params.id;
     const { doctor_id, role } = req.body;
@@ -265,6 +255,10 @@ app.delete('/api/shift/delete/:id', async (req, res) => {
         if (!shift) return res.status(404).json({ error: "Ek mesai bulunamadı." });
 
         if (role !== 'admin') {
+            if (shift.created_by === 'admin') {
+                return res.status(403).json({ error: "Yöneticinin eklediği ek mesailer yalnızca yönetici tarafından silinebilir!" });
+            }
+
             if (shift.doctor_id !== doctor_id) {
                 return res.status(403).json({ error: "Sadece kendi ek mesainizi silebilirsiniz!" });
             }
@@ -276,7 +270,7 @@ app.delete('/api/shift/delete/:id', async (req, res) => {
             const activeMonth = activeMonthRow ? activeMonthRow.value : null;
 
             if (activeMonth && shiftMonth !== activeMonth) {
-                return res.status(400).json({ error: `Geçmiş/Gelecek aylara ait ek mesaileri silemezsiniz! (Aktif Ay: ${activeMonth})` });
+                return res.status(400).json({ error: `Geçmiş/Gelecek aylara ait ek mesaileri silemezsiniz!` });
             }
         }
 
@@ -286,11 +280,60 @@ app.delete('/api/shift/delete/:id', async (req, res) => {
     });
 });
 
-// YÖNETİCİ RUTİN NÖBET SİLME
 app.delete('/api/admin/main-duty/:id', (req, res) => {
     db.run(`DELETE FROM main_duties WHERE id = ?`, [req.params.id], () => {
         res.json({ message: "Rutin 24s nöbet silindi." });
     });
+});
+
+// YÖNETİCİ EXCEL ÇIKTISI ALMA
+app.get('/api/admin/export-excel', async (req, res) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Nöbet ve Ek Mesai Listesi');
+
+        worksheet.columns = [
+            { header: 'Tarih', key: 'date', width: 15 },
+            { header: 'Hekim Adı', key: 'doctor', width: 25 },
+            { header: 'Görev Türü', key: 'type', width: 18 },
+            { header: 'Alan', key: 'area', width: 18 },
+            { header: 'Süre (Saat)', key: 'duration', width: 15 },
+            { header: 'Ekleyen', key: 'created_by', width: 15 }
+        ];
+
+        const duties = await new Promise(resolve => {
+            db.all(`SELECT md.duty_date as date, d.name as doctor, '24 Sa Nöbet' as type, '-' as area, 24 as duration, md.created_by
+                    FROM main_duties md JOIN doctors d ON md.doctor_id = d.id`, [], (err, rows) => resolve(rows || []));
+        });
+
+        const shifts = await new Promise(resolve => {
+            db.all(`SELECT s.shift_date as date, d.name as doctor, 'Ek Mesai' as type, s.area, s.duration, s.created_by
+                    FROM shifts s JOIN doctors d ON s.doctor_id = d.id`, [], (err, rows) => resolve(rows || []));
+        });
+
+        const allRecords = [...duties, ...shifts].sort((a, b) => a.date.localeCompare(b.date));
+
+        allRecords.forEach(r => {
+            worksheet.addRow({
+                date: r.date,
+                doctor: r.doctor,
+                type: r.type,
+                area: r.area,
+                duration: r.duration,
+                created_by: r.created_by === 'admin' ? 'Yönetici' : 'Hekim'
+            });
+        });
+
+        worksheet.getRow(1).font = { bold: true };
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=Acil_Servis_Nobet_Listesi.xlsx');
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (err) {
+        res.status(500).json({ error: "Excel dosyası oluşturulamadı." });
+    }
 });
 
 app.listen(PORT, () => console.log(`Sunucu ${PORT} portunda aktif.`));
