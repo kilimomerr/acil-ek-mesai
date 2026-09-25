@@ -9,10 +9,10 @@
         h1, h2, h3 { color: #2c3e50; margin-top: 0; }
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         
-        /* GİRİŞ EKRANI STİLLERİ */
+        /* GİRİŞ EKRANI */
         #loginSection { max-width: 400px; margin: 50px auto; }
         
-        /* PANEL STİLLERİ */
+        /* PORTAL EKRANI */
         #mainPortal { display: none; }
         .container { display: flex; gap: 20px; }
         .form-card { flex: 1; }
@@ -26,6 +26,8 @@
         button:hover { background-color: #219150; }
         .btn-secondary { background-color: #7f8c8d; }
         .btn-secondary:hover { background-color: #95a5a6; }
+        .btn-cancel { background-color: #e74c3c; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; width: auto; }
+        .btn-cancel:hover { background-color: #c0392b; }
         
         .error { color: #c0392b; background-color: #f9ebea; padding: 10px; border-radius: 4px; border: 1px solid #f5b7b1; margin-bottom: 15px; display: none; }
         .success { color: #27ae60; background-color: #eafaf1; padding: 10px; border-radius: 4px; border: 1px solid #a9dfbf; margin-bottom: 15px; display: none; }
@@ -38,7 +40,7 @@
 </head>
 <body>
 
-    <!-- 1. GİRİŞ EKRANI (LOKAL VE MESAİ İÇİN ŞİFRELİ KAPISI) -->
+    <!-- 1. GİRİŞ EKRANI -->
     <div id="loginSection" class="card">
         <h2 style="text-align: center;">🏥 Hekim Giriş Portalı</h2>
         <div id="loginError" class="error"></div>
@@ -55,7 +57,7 @@
         <button onclick="toggleAdminMode()" class="btn-secondary" style="margin-top: 8px;">👑 Yönetici Girişi</button>
     </div>
 
-    <!-- 2. ANA PORTAL (GİRİŞ YAPILDIKTAN SONRA AÇILIR) -->
+    <!-- 2. ANA PORTAL -->
     <div id="mainPortal">
         <div class="user-header card">
             <div>
@@ -65,7 +67,7 @@
             <button onclick="handleLogout()" class="btn-secondary" style="width: auto; margin: 0; padding: 8px 15px;">Çıkış Yap</button>
         </div>
 
-        <!-- YÖNETİCİ PANELİ (Sadece Admin modunda görünür) -->
+        <!-- YÖNETİCİ PANELİ -->
         <div id="adminPanel" class="admin-card">
             <h3>👑 Yönetici Paneli (Canlı Limit Düzenleme)</h3>
             <p>Limit düşürülürse, hekimlerin en erken yazdığı ilk ek mesaileri korunur, kalanlar otomatik temizlenir.</p>
@@ -152,120 +154,12 @@
         const selectedIndex = loginSelect.selectedIndex;
         const selectedName = doctors[selectedIndex];
 
-        // Şifre Doğrulama (Varsayılan şifre: 1234)
         if (password === "1234") {
             currentLoggedInUser = { id: selectedIndex + 1, name: selectedName };
             document.getElementById('activeUserName').innerText = "Dr. " + selectedName;
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('mainPortal').style.display = 'block';
             document.getElementById('loginError').style.display = 'none';
-        } else {
-            showLoginError("Hatalı şifre! (Varsayılan şifre: 1234)");
-        }
-    }
-
-    function toggleAdminMode() {
-        const password = prompt("Yönetici Şifrenizi Giriniz:");
-        if (password === "admin123" || password === "1234") {
-            currentLoggedInUser = { id: 0, name: "Yönetici" };
-            document.getElementById('activeUserName').innerText = "👑 Yönetici Paneli";
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('mainPortal').style.display = 'block';
-            document.getElementById('adminPanel').style.display = 'block';
-        } else if (password !== null) {
-            alert("Hatalı Yönetici Şifresi!");
-        }
-    }
-
-    function handleLogout() {
-        currentLoggedInUser = null;
-        document.getElementById('loginPassword').value = '';
-        document.getElementById('loginSection').style.display = 'block';
-        document.getElementById('mainPortal').style.display = 'none';
-        document.getElementById('adminPanel').style.display = 'none';
-    }
-
-    function showLoginError(msg) {
-        const box = document.getElementById('loginError');
-        box.innerText = msg;
-        box.style.display = 'block';
-    }
-
-    async function setAdminLimit() {
-        const newLimit = document.getElementById('adminLimit').value;
-        const res = await fetch('/api/admin/set-limit', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ newLimit })
-        });
-        const data = await res.json();
-        alert(data.message || "Limit güncellendi.");
-    }
-
-    async function saveShift() {
-        if (!currentLoggedInUser) return;
-
-        const doctor_id = currentLoggedInUser.id;
-        const shift_date = document.getElementById('shiftDate').value;
-        const area = document.getElementById('areaSelect').value;
-        const duration = document.getElementById('durationSelect').value;
-
-        if (!shift_date) {
-            alert("Lütfen bir tarih seçiniz.");
-            return;
-        }
-
-        const res = await fetch('/api/shift/add', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ doctor_id, shift_date, area, duration })
-        });
-        const data = await res.json();
-
-        if(data.error) {
-            document.getElementById('errorBox').innerText = data.error;
-            document.getElementById('errorBox').style.display = 'block';
-            document.getElementById('successBox').style.display = 'none';
-        } else {
-            document.getElementById('successBox').innerText = data.message || "Ek mesai başarıyla kaydedildi.";
-            document.getElementById('successBox').style.display = 'block';
-            document.getElementById('errorBox').style.display = 'none';
-        }
-    }
-<script>
-    const doctors = [
-        "BERİTAN ZÜMRÜT", "YASER HASAN BOLAT", "AHMET ÖZAY", "FATMA KÖLEOĞLU",
-        "ENES GÜLDEŞ", "ÖMER TARIK SARIBIYIK", "HALİL CAN DOĞAN", "SÜEDA YALÇIN",
-        "AHMET DÖNEN", "MUHAMMED ŞEN", "NİSANUR YALÇIN", "TUTKU SOYDAL",
-        "TUNAHAN KAYA", "YAKUP BORA PEKTAŞ", "ÖMER KİLİM", "BARAN NİKBAY",
-        "OĞUZCAN TÜFEKCİ", "ÖMER FARUK AKINCI", "SERKAN KANAT", "FARUK ARI",
-        "TÜRKAN ESİN", "MUSTAFA GÜLŞEN", "HÜRRE KÖSE", "SERAP ORAL"
-    ];
-
-    let currentLoggedInUser = null;
-
-    // Hekim listesini doldur
-    const loginSelect = document.getElementById('loginDoctorSelect');
-    doctors.forEach((doc, idx) => {
-        let opt = document.createElement('option');
-        opt.value = idx + 1;
-        opt.innerText = doc;
-        loginSelect.appendChild(opt);
-    });
-
-    function handleLogin() {
-        const password = document.getElementById('loginPassword').value;
-        const selectedIndex = loginSelect.selectedIndex;
-        const selectedName = doctors[selectedIndex];
-
-        if (password === "1234") {
-            currentLoggedInUser = { id: selectedIndex + 1, name: selectedName };
-            document.getElementById('activeUserName').innerText = "Dr. " + selectedName;
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('mainPortal').style.display = 'block';
-            document.getElementById('loginError').style.display = 'none';
-            
-            // Giriş yapıldığı an nöbetleri veritabanından çekip yükle
             loadShifts();
         } else {
             showLoginError("Hatalı şifre! (Varsayılan şifre: 1234)");
@@ -280,8 +174,6 @@
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('mainPortal').style.display = 'block';
             document.getElementById('adminPanel').style.display = 'block';
-            
-            // Yönetici girdiğinde de nöbetleri yükle
             loadShifts();
         } else if (password !== null) {
             alert("Hatalı Yönetici Şifresi!");
@@ -302,7 +194,6 @@
         box.style.display = 'block';
     }
 
-    // NÖBETLERİ VERİTABANINDAN ÇEKİP TABLOYA YAZDIRAN FONKSİYON
     async function loadShifts() {
         try {
             const res = await fetch('/api/shifts');
@@ -344,7 +235,7 @@
         });
         const data = await res.json();
         alert(data.message || "Limit güncellendi.");
-        loadShifts(); // Limitten sonra tabloyu yenile
+        loadShifts();
     }
 
     async function saveShift() {
@@ -375,8 +266,6 @@
             document.getElementById('successBox').innerText = data.message || "Ek mesai başarıyla kaydedildi.";
             document.getElementById('successBox').style.display = 'block';
             document.getElementById('errorBox').style.display = 'none';
-            
-            // Mesai kaydedildiğinde tabloyu anında yenile
             loadShifts();
         }
     }
@@ -388,7 +277,7 @@
         const data = await res.json();
         if (data.message) {
             alert(data.message);
-            loadShifts(); // İptal sonrası tabloyu yenile
+            loadShifts();
         } else if (data.error) {
             alert(data.error);
         }
